@@ -2,6 +2,8 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import '@fontsource/noto-sans-sc/chinese-simplified-400.css'
 import '@fontsource/noto-sans-sc/latin-400.css'
+import '@fontsource-variable/inter/index.css'
+import './shadcn.css'
 import './style.css'
 import './light-theme.css'
 

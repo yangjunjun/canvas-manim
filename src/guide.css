@@ -1,5 +1,7 @@
 @import '@fontsource/noto-sans-sc/chinese-simplified-400.css';
 @import '@fontsource/noto-sans-sc/latin-400.css';
+@import '@fontsource-variable/inter/index.css';
+@import './shadcn.css';
 
 :root {
   font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -82,48 +84,48 @@ pre { margin: 0; padding: 21px; border: 1px solid #314457; border-top: 0; border
 @media(max-width:750px) { .site-header { padding: 0 17px; }.page-layout { display: block; }.side-nav { position: static; height: auto; border-right: 0; border-bottom: 1px solid #243449; flex-direction: row; gap: 3px; padding: 11px 14px; overflow-x: auto; white-space: nowrap; }.nav-caption { display: none; }.side-nav a { flex: none; font-size: 12px; padding: 7px 9px; }.content { padding: 0 18px; }.hero { min-height: 0; gap: 25px; }.hero-art { height: 200px; }.overview { grid-template-columns: 1fr; }.overview>div+div { border-left: 0; border-top: 1px solid #2a3a4f; }.overview>div { padding: 14px 17px; }.doc-section { padding-top: 55px; }.two-columns, .template-cards { grid-template-columns: 1fr; }.steps li { grid-template-columns: 32px 1fr; gap: 8px; padding: 18px 15px; }.code-head { flex-wrap: wrap; }.guide-footer { flex-direction: column; } }
 
 /* Shared light visual language with the editor; animation scenes keep their own colors. */
-:root { color-scheme: light; color: #24292f; background: #fff; }
-body { background: #fff; }
-a:focus-visible, summary:focus-visible { outline: 2px solid #0969da; outline-offset: 2px; }
-code { color: #0550ae; background: #f1f3f5; }
-.site-header { background: #fff; border-bottom-color: #d8dee4; }
-.brand { color: #1f2328; }
-.brand small { color: #6e7781; }
-.brand-mark { color: #fff; background: #171717; }
-.header-action { color: #fff; background: #171717; border-color: #171717; }
-.header-action:hover, .primary-action:hover { color: #fff; background: #404040; }
-.side-nav { border-color: #d8dee4; }
-.side-nav a { color: #57606a; }
-.side-nav a:hover, .side-nav a:focus-visible { color: #0969da; background: #eef5ff; }
-.nav-caption { color: #8c959f; }
-.hero { border-bottom-color: #d8dee4; }
-.eyebrow, .chapter { color: #0969da; }
-h1, h2, .overview strong, .steps h3, .info-card h3, .template-cards h3 { color: #1f2328; }
-h1 em { color: #0969da; }
-.lead, .section-heading p, .note, .steps p, .info-card p, .template-cards p, .export-list p, .faq p { color: #57606a; }
-.primary-action { color: #fff; background: #171717; }
-.secondary-action { color: #24292f; background: #fff; border-color: #d0d7de; }
-.secondary-action:hover { color: #0969da; border-color: #0969da; }
-.hero-art { border-color: #d0d7de; background: radial-gradient(circle at 76% 35%, #ddf4ff, #f6f8fa 60%, #fff); box-shadow: 0 14px 38px #1f23281a; }
-.art-grid { background-image: linear-gradient(#1f23280b 1px, transparent 1px), linear-gradient(90deg, #1f23280b 1px, transparent 1px); }
-.art-path { border-top-color: #0969da99; }
-.art-ball { background: #0969da; box-shadow: 0 0 28px #0969da55; }
-.art-start, .art-end { color: #6e7781; }
-.art-timeline { background: #afb8c1; }
-.art-timeline span { background: #0969da; }
-.overview, .steps, .info-card, .template-cards article, .export-list>div, .faq details { color: #24292f; background: #fff; border-color: #d8dee4; }
-.overview>div+div, .steps li+li { border-color: #d8dee4; }
-.overview-number, .step-index { color: #0969da; }
-.overview small { color: #6e7781; }
-.steps strong, .info-card strong { color: #1f2328; }
+:root { color-scheme: light; color: var(--foreground); background: var(--background); font-family: 'Inter Variable', 'Noto Sans SC', sans-serif; }
+body { background: var(--background); font-family: 'Inter Variable', 'Noto Sans SC', sans-serif; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+code { color: var(--foreground); background: var(--secondary); }
+.site-header { background: var(--background); border-bottom-color: var(--border); }
+.brand { color: var(--foreground); }
+.brand small { color: var(--muted-foreground); }
+.brand-mark { color: var(--primary-foreground); background: var(--primary); border-radius: var(--radius); }
+.header-action { color: var(--primary-foreground); background: var(--primary); border-color: var(--primary); border-radius: var(--radius); }
+.header-action:hover, .primary-action:hover { color: var(--primary-foreground); background: var(--foreground); }
+.side-nav { border-color: var(--border); }
+.side-nav a { color: var(--muted-foreground); }
+.side-nav a:hover, .side-nav a:focus-visible { color: var(--foreground); background: var(--accent); }
+.nav-caption { color: var(--muted-foreground); }
+.hero { border-bottom-color: var(--border); }
+.eyebrow, .chapter { color: var(--foreground); }
+h1, h2, .overview strong, .steps h3, .info-card h3, .template-cards h3 { color: var(--foreground); }
+h1 em { color: var(--muted-foreground); }
+.lead, .section-heading p, .note, .steps p, .info-card p, .template-cards p, .export-list p, .faq p { color: var(--muted-foreground); }
+.primary-action { color: var(--primary-foreground); background: var(--primary); border-radius: var(--radius); }
+.secondary-action { color: var(--foreground); background: var(--background); border-color: var(--border); border-radius: var(--radius); }
+.secondary-action:hover { color: var(--foreground); border-color: var(--ring); }
+.hero-art { border-color: var(--border); background: radial-gradient(circle at 76% 35%, var(--secondary), var(--background) 70%); box-shadow: 0 14px 38px #0002; }
+.art-grid { background-image: linear-gradient(#0000000b 1px, transparent 1px), linear-gradient(90deg, #0000000b 1px, transparent 1px); }
+.art-path { border-top-color: var(--muted-foreground); }
+.art-ball { background: var(--primary); box-shadow: 0 0 28px #0004; }
+.art-start, .art-end { color: var(--muted-foreground); }
+.art-timeline { background: var(--border); }
+.art-timeline span { background: var(--primary); }
+.overview, .steps, .info-card, .template-cards article, .export-list>div, .faq details { color: var(--foreground); background: var(--card); border-color: var(--border); border-radius: var(--radius-lg); }
+.overview>div+div, .steps li+li { border-color: var(--border); }
+.overview-number, .step-index { color: var(--foreground); }
+.overview small { color: var(--muted-foreground); }
+.steps strong, .info-card strong { color: var(--foreground); }
 .tip { color: #6e5500; background: #fff8c5; border-left-color: #bf8700; }
 .tip strong { color: #7d4e00; }.tip code { color: #7d4e00; background: #ffedab; }
-.inline-action { color: #0969da; }.inline-action:hover { color: #0550ae; }
-.card-symbol { color: #0969da; background: #ddf4ff; }
-.callout { color: #315b75; background: #eef5ff; border-color: #b6d4fe; }.callout strong { color: #0550ae; }
+.inline-action { color: var(--foreground); }.inline-action:hover { color: var(--muted-foreground); }
+.card-symbol { color: var(--foreground); background: var(--secondary); }
+.callout { color: var(--foreground); background: var(--secondary); border-color: var(--border); }.callout strong { color: var(--foreground); }
 .template-glyph.teal { color: #087f6d; background: #ddf6ee; }.template-glyph.blue { color: #0969da; background: #ddf4ff; }.template-glyph.amber { color: #9a6700; background: #fff4ce; }
-.export-list strong { color: #1f2328; }
-.code-head { color: #57606a; background: #f6f8fa; border-color: #d8dee4; }.code-head a { color: #0969da; }
-pre { color: #24292f; background: #f6f8fa; border-color: #d8dee4; }
-.faq summary { color: #24292f; }.faq summary:hover { color: #0969da; }
-.guide-footer { color: #6e7781; border-top-color: #d8dee4; }.guide-footer a { color: #0969da; }
+.export-list strong { color: var(--foreground); }
+.code-head { color: var(--muted-foreground); background: var(--secondary); border-color: var(--border); }.code-head a { color: var(--foreground); }
+pre { color: var(--foreground); background: var(--secondary); border-color: var(--border); }
+.faq summary { color: var(--foreground); }.faq summary:hover { color: var(--muted-foreground); }
+.guide-footer { color: var(--muted-foreground); border-top-color: var(--border); }.guide-footer a { color: var(--foreground); }

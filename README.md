@@ -22,6 +22,8 @@ pnpm run check:sdk
 浏览器冒烟测试需要本地开发服务器及 Chromium。设置 `CANVAS_MANIM_CHROMIUM` 为本机 Chromium 可执行文件路径后运行 `pnpm test:browser`。
 两条创作路径的操作步骤见 [使用指南](docs/usage.md)。
 
+编辑器界面使用 shadcn-vue 的 `a2LKcc4` preset（Reka Mira / Neutral / Inter）与 Tailwind CSS 4。主题配置在 `components.json` 和 `src/shadcn.css`；画布内部的深色配色属于作品内容，不随编辑器主题改变。Inter 字体随构建本地打包，无需在线字体服务。
+
 编辑器左侧「快速开始」内置六个可编辑项目：正弦函数、单位圆、抛体运动、单摆运动、二分查找和冒泡排序。新增三个项目在 SDK 中分别可通过 `templates.unitCircle()`、`templates.pendulum()`、`templates.bubbleSort()` 创建。
 
 ## SDK 使用

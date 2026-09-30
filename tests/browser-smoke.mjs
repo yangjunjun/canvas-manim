@@ -15,7 +15,10 @@ try {
   page.on('pageerror', error => errors.push(error.message))
   await page.goto(baseURL, { waitUntil: 'networkidle' })
   await page.getByRole('heading', { name: /正弦函数/ }).waitFor()
-  assert.equal(await page.locator('.topbar').evaluate(node => getComputedStyle(node).backgroundColor), 'rgb(255, 255, 255)')
+  const themeBackground = await page.locator('html').evaluate(node => getComputedStyle(node).getPropertyValue('--background').trim())
+  assert.equal(await page.locator('.topbar').evaluate(node => getComputedStyle(node).backgroundColor), themeBackground)
+  assert.match(await page.locator('body').evaluate(node => getComputedStyle(node).fontFamily), /Inter Variable/)
+  assert.equal(await page.locator('.export-trigger').getAttribute('data-slot'), 'dropdown-menu-trigger')
   const initialStageWidth = (await page.locator('.stage-section').boundingBox()).width
   await page.getByRole('button', { name: '折叠左侧栏' }).click()
   assert.equal(await page.locator('#left-panel').isVisible(), false)
@@ -23,16 +26,16 @@ try {
   await page.waitForFunction(width => document.querySelector('.stage-section').getBoundingClientRect().width > width + 100, initialStageWidth)
   await page.getByRole('button', { name: '折叠右侧栏' }).click()
   assert.equal(await page.locator('#right-panel').isVisible(), false)
-  const exportTrigger = page.getByRole('button', { name: '导出作品' })
+  const exportTrigger = page.locator('.export-trigger')
   assert.equal(await exportTrigger.isVisible(), true, '右侧栏折叠后仍可导出')
   await exportTrigger.click()
   assert.equal(await exportTrigger.getAttribute('aria-expanded'), 'true')
-  assert.equal(await page.getByRole('button', { name: /当前帧 PNG/ }).isVisible(), true)
+  assert.equal(await page.getByRole('menuitem', { name: /当前帧 PNG/ }).isVisible(), true)
   await page.keyboard.press('Escape')
   assert.equal(await exportTrigger.getAttribute('aria-expanded'), 'false')
   await exportTrigger.click()
   await page.locator('.stage-header').click()
-  assert.equal(await page.locator('#export-dropdown-panel').count(), 0, '点击菜单外应关闭下拉菜单')
+  await page.locator('#export-dropdown-panel').waitFor({ state: 'detached' })
   await page.getByRole('button', { name: '展开左侧栏' }).click()
   assert.equal(await page.locator('#left-panel').isVisible(), true)
   assert.equal(await page.locator('#right-panel').isVisible(), false)
@@ -42,7 +45,8 @@ try {
   await page.getByRole('link', { name: /使用指南/ }).first().click()
   const guidePage = await guidePopup
   await guidePage.getByRole('heading', { name: /第一个科普动画/ }).waitFor()
-  assert.equal(await guidePage.locator('body').evaluate(node => getComputedStyle(node).backgroundColor), 'rgb(255, 255, 255)')
+  assert.equal(await guidePage.locator('body').evaluate(node => getComputedStyle(node).backgroundColor), themeBackground)
+  assert.match(await guidePage.locator('body').evaluate(node => getComputedStyle(node).fontFamily), /Noto Sans SC/)
   await guidePage.getByRole('link', { name: '第一个动画' }).click()
   assert.match(guidePage.url(), /guide\.html#first-animation$/)
   assert.match(page.url(), /\/$/, '打开指南后原编辑器仍应保留')
@@ -136,7 +140,7 @@ try {
   assert.equal(await page.locator('.track-row').count(), 1)
   const pngPromise = page.waitForEvent('download')
   await exportTrigger.click()
-  await page.getByRole('button', { name: /当前帧 PNG/ }).click()
+  await page.getByRole('menuitem', { name: /当前帧 PNG/ }).click()
   const pngDownload = await pngPromise
   assert.match(pngDownload.suggestedFilename(), /\.png$/)
   assert.ok((await stat(await pngDownload.path())).size > 1000)
@@ -146,13 +150,13 @@ try {
   await page.getByLabel('时长（秒）').press('Tab')
   const framesPromise = page.waitForEvent('download')
   await exportTrigger.click()
-  await page.getByRole('button', { name: /逐帧 ZIP/ }).click()
+  await page.getByRole('menuitem', { name: /逐帧 ZIP/ }).click()
   const framesDownload = await framesPromise
   assert.ok((await stat(await framesDownload.path())).size > 1000)
   await exportTrigger.click()
-  if (await page.getByRole('button', { name: /视频 WebM|视频 MP4/ }).isEnabled()) {
+  if (await page.getByRole('menuitem', { name: /视频 WebM|视频 MP4/ }).isEnabled()) {
     const videoPromise = page.waitForEvent('download')
-    await page.getByRole('button', { name: /视频 WebM|视频 MP4/ }).click()
+    await page.getByRole('menuitem', { name: /视频 WebM|视频 MP4/ }).click()
     const videoDownload = await videoPromise
     assert.ok((await stat(await videoDownload.path())).size > 1000)
     const mime = videoDownload.suggestedFilename().endsWith('.mp4') ? 'video/mp4' : 'video/webm'
@@ -166,7 +170,7 @@ try {
     }, source)
     assert.ok(metadata.duration > 0 && metadata.width > 0 && metadata.height > 0)
   } else {
-    assert.match(await page.getByRole('button', { name: /视频 WebM|视频 MP4/ }).getAttribute('title'), /浏览器不支持视频录制/)
+    assert.match(await page.getByRole('menuitem', { name: /视频 WebM|视频 MP4/ }).getAttribute('title'), /浏览器不支持视频录制/)
   }
   assert.deepEqual(errors, [])
   if (process.env.CANVAS_MANIM_SCREENSHOT) await page.screenshot({ path: process.env.CANVAS_MANIM_SCREENSHOT, fullPage: true })

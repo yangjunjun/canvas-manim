@@ -6,6 +6,9 @@ import { hitTestScene, selectionBounds } from './core/hit-test.ts'
 import { projectFromBlob, projectToBlob } from './core/project-file.ts'
 import { createBlankProject, templates } from './core/templates.ts'
 import { download, exportFrames, exportPng, exportVideo, supportedVideoType } from './core/export.ts'
+import { ChevronDown, Download, PanelLeft, PanelRight, Pause, Play, Redo2, SkipForward, Undo2 } from '@lucide/vue'
+import { Button } from './components/ui/button'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './components/ui/dropdown-menu'
 import type { Project, SceneNode, Track } from './core/types.ts'
 
 const project = ref<Project>(templates.math())
@@ -13,8 +16,6 @@ const sceneId = ref(project.value.scenes[0].id)
 const canvas = ref<HTMLCanvasElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const imageInput = ref<HTMLInputElement | null>(null)
-const exportMenu = ref<HTMLElement | null>(null)
-const exportButton = ref<HTMLButtonElement | null>(null)
 const player = ref<Player | null>(null)
 const selectedId = ref<string | null>(null)
 const selectedTrack = ref('x')
@@ -354,15 +355,6 @@ async function output(kind: 'png' | 'video' | 'frames'): Promise<void> {
   finally { busy.value = false }
 }
 
-function toggleExportMenu(): void {
-  exportOpen.value = !exportOpen.value
-  if (exportOpen.value) nextTick(() => exportMenu.value?.querySelector<HTMLButtonElement>('.export-option:not(:disabled)')?.focus())
-}
-
-function closeExportOnOutside(event: PointerEvent): void {
-  if (exportOpen.value && !exportMenu.value?.contains(event.target as Node)) exportOpen.value = false
-}
-
 function canvasPoint(event: PointerEvent): [number, number] {
   const bounds = canvas.value!.getBoundingClientRect()
   return [(event.clientX - bounds.left) / bounds.width * project.value.canvas.width, (event.clientY - bounds.top) / bounds.height * project.value.canvas.height]
@@ -407,14 +399,8 @@ function canvasPointerUp(): void {
 }
 
 function keyboard(event: KeyboardEvent): void {
-  if (event.key === 'Escape' && exportOpen.value) {
-    event.preventDefault()
-    exportOpen.value = false
-    exportButton.value?.focus()
-    return
-  }
   const target = event.target as HTMLElement
-  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.closest('button, a, [role="menuitem"], [role="button"]')) return
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); event.shiftKey ? redo() : undo() }
   else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') { event.preventDefault(); redo() }
   else if (event.key === ' ') { event.preventDefault(); togglePlay() }
@@ -430,9 +416,8 @@ onMounted(async () => {
     player.value.onError = announce
   }
   window.addEventListener('keydown', keyboard)
-  window.addEventListener('pointerdown', closeExportOnOutside)
 })
-onBeforeUnmount(() => { window.removeEventListener('keydown', keyboard); window.removeEventListener('pointerdown', closeExportOnOutside); player.value?.destroy() })
+onBeforeUnmount(() => { window.removeEventListener('keydown', keyboard); player.value?.destroy() })
 </script>
 
 <template>
@@ -441,26 +426,26 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', keyboard); window.
       <div class="top-left">
         <div class="brand"><span class="brand-mark">◈</span><div><strong>Canvas Manim</strong><small>数学与科学动画工作台</small></div></div>
         <div class="panel-switches" aria-label="工作区面板">
-          <button class="panel-toggle" :class="{ active: !leftCollapsed }" :aria-expanded="!leftCollapsed" aria-controls="left-panel" :aria-label="leftCollapsed ? '展开左侧栏' : '折叠左侧栏'" @click="togglePanel('left')"><span aria-hidden="true">▤</span><span>图层</span></button>
-          <button class="panel-toggle" :class="{ active: !rightCollapsed }" :aria-expanded="!rightCollapsed" aria-controls="right-panel" :aria-label="rightCollapsed ? '展开右侧栏' : '折叠右侧栏'" @click="togglePanel('right')"><span aria-hidden="true">▥</span><span>属性</span></button>
+          <Button variant="ghost" size="lg" class="panel-toggle" :class="{ active: !leftCollapsed }" :aria-expanded="!leftCollapsed" aria-controls="left-panel" :aria-label="leftCollapsed ? '展开左侧栏' : '折叠左侧栏'" @click="togglePanel('left')"><PanelLeft aria-hidden="true" /><span>图层</span></Button>
+          <Button variant="ghost" size="lg" class="panel-toggle" :class="{ active: !rightCollapsed }" :aria-expanded="!rightCollapsed" aria-controls="right-panel" :aria-label="rightCollapsed ? '展开右侧栏' : '折叠右侧栏'" @click="togglePanel('right')"><PanelRight aria-hidden="true" /><span>属性</span></Button>
         </div>
       </div>
       <div class="top-actions">
         <span class="project-name">{{ project.name }}</span>
-        <a class="ghost help-link" href="./guide.html" target="_blank" rel="noopener noreferrer">？ 使用指南</a>
-        <button class="ghost" title="撤销 Ctrl+Z" @click="undo">↶</button>
-        <button class="ghost" title="重做 Ctrl+Y" @click="redo">↷</button>
-        <button class="ghost" @click="newProject('blank')">新建</button>
-        <button class="ghost" @click="fileInput?.click()">打开</button>
-        <button class="ghost" @click="save">保存项目</button>
-        <div ref="exportMenu" class="export-dropdown">
-          <button ref="exportButton" class="export-trigger" type="button" :disabled="busy" :aria-expanded="exportOpen" aria-controls="export-dropdown-panel" @click="toggleExportMenu"><span aria-hidden="true">⇩</span>导出作品<span class="export-chevron" aria-hidden="true">⌄</span></button>
-          <div v-if="exportOpen" id="export-dropdown-panel" class="export-dropdown-panel" aria-label="导出格式">
-            <button class="export-option" type="button" :disabled="busy" @click="output('png')"><span class="export-option-icon" aria-hidden="true">▧</span><span><strong>当前帧 PNG</strong><small>保存当前播放时刻</small></span></button>
-            <button class="export-option" type="button" :disabled="busy || !supportVideo" :title="supportVideo || '浏览器不支持视频录制'" @click="output('video')"><span class="export-option-icon" aria-hidden="true">▶</span><span><strong>视频 {{ supportVideo?.includes('mp4') ? 'MP4' : 'WebM' }}</strong><small>{{ supportVideo ? '导出完整场景动画' : '当前浏览器不支持录制' }}</small></span></button>
-            <button class="export-option" type="button" :disabled="busy" @click="output('frames')"><span class="export-option-icon" aria-hidden="true">▦</span><span><strong>逐帧 ZIP</strong><small>下载 PNG 图片序列</small></span></button>
-          </div>
-        </div>
+        <Button as="a" href="./guide.html" target="_blank" rel="noopener noreferrer" variant="outline" size="lg" class="help-link">？ 使用指南</Button>
+        <Button variant="outline" size="icon-lg" title="撤销 Ctrl+Z" aria-label="撤销" @click="undo"><Undo2 aria-hidden="true" /></Button>
+        <Button variant="outline" size="icon-lg" title="重做 Ctrl+Y" aria-label="重做" @click="redo"><Redo2 aria-hidden="true" /></Button>
+        <Button variant="outline" size="lg" @click="newProject('blank')">新建</Button>
+        <Button variant="outline" size="lg" @click="fileInput?.click()">打开</Button>
+        <Button variant="outline" size="lg" @click="save">保存项目</Button>
+        <DropdownMenu v-model:open="exportOpen" :modal="false">
+          <DropdownMenuTrigger as-child><Button size="lg" class="export-trigger" :disabled="busy"><Download aria-hidden="true" />导出作品<ChevronDown aria-hidden="true" /></Button></DropdownMenuTrigger>
+          <DropdownMenuContent id="export-dropdown-panel" align="end" :side-offset="8" class="export-dropdown-panel">
+            <DropdownMenuItem class="export-option" :disabled="busy" @select="output('png')"><span class="export-option-icon" aria-hidden="true">▧</span><span><strong>当前帧 PNG</strong><small>保存当前播放时刻</small></span></DropdownMenuItem>
+            <DropdownMenuItem class="export-option" :disabled="busy || !supportVideo" :title="supportVideo || '浏览器不支持视频录制'" @select="output('video')"><span class="export-option-icon" aria-hidden="true">▶</span><span><strong>视频 {{ supportVideo?.includes('mp4') ? 'MP4' : 'WebM' }}</strong><small>{{ supportVideo ? '导出完整场景动画' : '当前浏览器不支持录制' }}</small></span></DropdownMenuItem>
+            <DropdownMenuItem class="export-option" :disabled="busy" @select="output('frames')"><span class="export-option-icon" aria-hidden="true">▦</span><span><strong>逐帧 ZIP</strong><small>下载 PNG 图片序列</small></span></DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <input ref="fileInput" type="file" accept=".cmanim,.json,application/zip,application/json" hidden @change="openFile" />
         <input ref="imageInput" type="file" accept="image/png,image/jpeg,image/webp" hidden @change="importImage" />
       </div>
@@ -495,8 +480,8 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', keyboard); window.
           <svg v-if="selectionBox" class="selection-overlay" :viewBox="`0 0 ${project.canvas.width} ${project.canvas.height}`" preserveAspectRatio="none" aria-hidden="true"><rect class="selection-rect" :x="selectionBox.x" :y="selectionBox.y" :width="selectionBox.width" :height="selectionBox.height" /><circle v-for="(corner, index) in [[selectionBox.x, selectionBox.y], [selectionBox.x + selectionBox.width, selectionBox.y], [selectionBox.x, selectionBox.y + selectionBox.height], [selectionBox.x + selectionBox.width, selectionBox.y + selectionBox.height]]" :key="index" class="selection-handle" :cx="corner[0]" :cy="corner[1]" r="4" /></svg>
           <span class="canvas-badge">{{ selected ? `已选中 · ${displayNodeName(selected)}` : '点击画布或图层选择对象' }}</span>
         </div>
-        <div class="transport"><button class="play-button" :aria-label="playLabel" @click="togglePlay">{{ playing ? 'Ⅱ' : '▶' }}</button><button class="step-button" title="下一帧" @click="player?.step()">⏭</button><span class="time-readout">{{ currentTime.toFixed(2) }} / {{ scene.duration.toFixed(2) }} s</span><input class="scrubber" type="range" min="0" :max="scene.duration" step="0.01" :value="currentTime" aria-label="播放进度" @input="seek" /></div>
-        <div class="timeline-panel"><div class="timeline-header"><div><strong>时间线</strong><small>选择对象后，为属性添加关键帧</small></div><div class="timeline-actions"><select v-model="selectedTrack" aria-label="动画属性"><option value="x">X 位置</option><option value="y">Y 位置</option><option value="opacity">透明度</option><option value="rotation">旋转</option><option value="scale">缩放</option><option value="fill">填充色</option><option value="text">文字</option></select><button @click="addKeyframe">＋ 关键帧</button></div></div>
+        <div class="transport"><Button class="play-button" :aria-label="playLabel" @click="togglePlay"><Pause v-if="playing" aria-hidden="true" /><Play v-else aria-hidden="true" /></Button><Button variant="outline" class="step-button" title="下一帧" aria-label="下一帧" @click="player?.step()"><SkipForward aria-hidden="true" /></Button><span class="time-readout">{{ currentTime.toFixed(2) }} / {{ scene.duration.toFixed(2) }} s</span><input class="scrubber" type="range" min="0" :max="scene.duration" step="0.01" :value="currentTime" aria-label="播放进度" @input="seek" /></div>
+        <div class="timeline-panel"><div class="timeline-header"><div><strong>时间线</strong><small>选择对象后，为属性添加关键帧</small></div><div class="timeline-actions"><select v-model="selectedTrack" aria-label="动画属性"><option value="x">X 位置</option><option value="y">Y 位置</option><option value="opacity">透明度</option><option value="rotation">旋转</option><option value="scale">缩放</option><option value="fill">填充色</option><option value="text">文字</option></select><Button variant="outline" size="sm" @click="addKeyframe">＋ 关键帧</Button></div></div>
           <div class="ruler"><span v-for="mark in 9" :key="mark">{{ ((mark - 1) * scene.duration / 8).toFixed(1) }}s</span></div>
           <div class="track-list"><div v-for="track in scene.tracks" :key="`${track.nodeId}.${track.property}`" class="track-row"><div class="track-label"><span>{{ scene.nodes.find(node => node.id === track.nodeId)?.name }}</span><small>{{ track.property }}</small><button title="删除轨道" @click="deleteTrack(track)">×</button></div><div class="track-line"><div v-for="(frame, index) in track.keyframes" :key="index" class="keyframe" :style="{ left: `${frame.time / scene.duration * 100}%` }" :title="`${frame.time}s: ${frame.value}`"><span>◆</span><input type="number" min="0" :max="scene.duration" step="0.1" :value="frame.time" aria-label="关键帧时间" @change="moveKeyframe(track, index, Number(($event.target as HTMLInputElement).value))" /><input :value="frame.value" aria-label="关键帧值" @change="editKeyframeValue(track, index, ($event.target as HTMLInputElement).value)" /></div></div></div><p v-if="!scene.tracks.length" class="empty-note">暂无关键帧。先选一个对象，再点击“＋ 关键帧”。</p></div>
         </div>
