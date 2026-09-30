@@ -23,6 +23,7 @@ export function validateProject(value: unknown): Project {
       if (node.scale !== undefined && (!Number.isFinite(node.scale) || node.scale <= 0)) throw new Error(`对象 ${node.id} 的缩放无效`)
       if (node.opacity !== undefined && (!Number.isFinite(node.opacity) || node.opacity < 0 || node.opacity > 1)) throw new Error(`对象 ${node.id} 的透明度无效`)
       if (node.radius !== undefined && (!Number.isFinite(node.radius) || node.radius < 0)) throw new Error(`对象 ${node.id} 的半径无效`)
+      if (node.lineDash !== undefined && (!Array.isArray(node.lineDash) || !node.lineDash.length || !node.lineDash.every(length => Number.isFinite(length) && length >= 0) || !node.lineDash.some(length => length > 0))) throw new Error(`对象 ${node.id} 的虚线样式无效`)
       if (node.x2 !== undefined && !Number.isFinite(node.x2) || node.y2 !== undefined && !Number.isFinite(node.y2)) throw new Error(`对象 ${node.id} 的终点无效`)
       for (const range of [node.xRange, node.yRange]) if (range && (range.length !== 2 || !Number.isFinite(range[0]) || !Number.isFinite(range[1]) || range[0] >= range[1])) throw new Error(`对象 ${node.id} 的坐标范围无效`)
       ids.add(node.id)

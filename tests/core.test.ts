@@ -60,8 +60,38 @@ test('单位圆投影与单摆周期随参数正确变化', () => {
   assert.ok(Number(evaluateScene(scene, 0, { length: 2.5 }).nodes.find(node => node.id === 'period')!.text!.match(/[\d.]+/)![0]) > 2.84)
 })
 
-test('冒泡排序结束时柱形与数值标签按升序排列', () => {
-  const scene = templates.bubbleSort().scenes[0]
+test('冒泡排序逐次展示所有比较、判断与移动标记', () => {
+  const scene = validateProject(templates.bubbleSort()).scenes[0]
+  const comparisons = [
+    [5, 2, true], [5, 8, false], [8, 1, true], [8, 6, true],
+    [2, 5, false], [5, 1, true], [5, 6, false],
+    [2, 1, true], [2, 5, false], [1, 2, false],
+  ] as const
+  const order = [5, 2, 8, 1, 6]
+  comparisons.forEach(([left, right, swapped], index) => {
+    const time = index * 1.6
+    const leftSlot = order.indexOf(left), rightSlot = order.indexOf(right)
+    const comparing = evaluateScene(scene, time + 0.1)
+    assert.equal(comparing.nodes.find(node => node.id === 'step')?.text, `第 ${index + 1} 次比较：${left} 和 ${right}`)
+    for (const [side, value, slot] of [['left', left, leftSlot], ['right', right, rightSlot]] as const) {
+      const box = comparing.nodes.find(node => node.id === `compare-box-${side}`)!
+      const arrow = comparing.nodes.find(node => node.id === `compare-arrow-${side}`)!
+      assert.equal(box.x, 162 + slot * 205)
+      assert.equal(box.y, 521 - value * 38)
+      assert.equal(box.opacity, 1)
+      assert.deepEqual(box.lineDash, [8, 6])
+      assert.equal(arrow.x2, box.x + 32)
+      assert.equal(arrow.y2, box.y - 12)
+      assert.equal(arrow.opacity, 1)
+    }
+    const result = evaluateScene(scene, time + 1.4)
+    assert.equal(result.nodes.find(node => node.id === 'step')?.text, swapped ? `${left} > ${right}，交换位置` : `${left} ≤ ${right}，不交换，继续比较`)
+    if (swapped) [order[leftSlot], order[rightSlot]] = [right, left]
+    assert.equal(result.nodes.find(node => node.id === `bar-${left}`)?.x, 125 + order.indexOf(left) * 205)
+    assert.equal(result.nodes.find(node => node.id === `bar-${right}`)?.x, 125 + order.indexOf(right) * 205)
+    assert.equal(result.nodes.find(node => node.id === 'compare-box-left')?.x, 162 + order.indexOf(left) * 205)
+    assert.equal(result.nodes.find(node => node.id === 'compare-box-right')?.x, 162 + order.indexOf(right) * 205)
+  })
   const sorted = evaluateScene(scene, scene.duration)
   const values = [1, 2, 5, 6, 8]
   values.forEach((value, index) => {
@@ -69,6 +99,8 @@ test('冒泡排序结束时柱形与数值标签按升序排列', () => {
     assert.equal(sorted.nodes.find(node => node.id === `value-${value}`)?.x, 179 + index * 205)
   })
   assert.match(sorted.nodes.find(node => node.id === 'step')?.text ?? '', /排序完成/)
+  assert.equal(sorted.nodes.find(node => node.id === 'compare-box-left')?.opacity, 0)
+  assert.equal(sorted.nodes.find(node => node.id === 'compare-arrow-right')?.opacity, 0)
 })
 
 test('场景格式拒绝冲突驱动和父子循环', () => {
@@ -79,6 +111,9 @@ test('场景格式拒绝冲突驱动和父子循环', () => {
   project.scenes[0].tracks = []
   project.scenes[0].nodes[0].parentId = 'a'
   assert.throws(() => validateProject(project), /父级无效/)
+  project.scenes[0].nodes[0].parentId = undefined
+  project.scenes[0].nodes[0].lineDash = [8, -1]
+  assert.throws(() => validateProject(project), /虚线样式无效/)
 })
 
 test('代码与编辑器共用的项目包可往返且保留扩展数据', async () => {

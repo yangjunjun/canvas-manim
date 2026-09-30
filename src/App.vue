@@ -462,7 +462,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', keyboard); player.
           <button @click="newProject('physics')"><span class="template-icon blue">↗</span><span>抛体运动<small>轨迹与速度</small></span></button>
           <button @click="newProject('pendulum')"><span class="template-icon blue">◡</span><span>单摆运动<small>周期与摆角</small></span></button>
           <button @click="newProject('binary')"><span class="template-icon amber">⌕</span><span>二分查找<small>算法逐步演示</small></span></button>
-          <button @click="newProject('bubbleSort')"><span class="template-icon amber">▥</span><span>冒泡排序<small>相邻交换过程</small></span></button>
+          <button @click="newProject('bubbleSort')"><span class="template-icon amber">▥</span><span>冒泡排序<small>逐次比较与交换</small></span></button>
         </div>
         <div class="section-title"><span>场景</span><button title="新增场景" @click="addScene">＋</button></div>
         <div class="scene-list"><button v-for="item in project.scenes" :key="item.id" :class="{ active: item.id === sceneId }" @click="chooseScene(item.id)">▣ &nbsp;{{ item.name }}</button></div>

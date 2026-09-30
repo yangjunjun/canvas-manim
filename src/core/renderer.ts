@@ -148,6 +148,7 @@ export function renderScene(canvas: HTMLCanvasElement, project: Project, state: 
     ctx.save()
     ctx.globalAlpha = node.opacity ?? 1
     ctx.lineWidth = node.lineWidth ?? 2
+    if (node.lineDash) ctx.setLineDash(node.lineDash)
     ctx.strokeStyle = node.stroke ?? '#dbeafe'
     ctx.fillStyle = node.fill ?? '#e2e8f0'
     if (node.type === 'axes') {

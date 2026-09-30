@@ -27,6 +27,7 @@ export interface SceneNode {
   fill?: string
   stroke?: string
   lineWidth?: number
+  lineDash?: number[]
   fontSize?: number
   text?: string
   valueExpression?: string

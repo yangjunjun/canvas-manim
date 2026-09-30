@@ -137,38 +137,84 @@ function pendulum(): Project {
 function bubbleSort(): Project {
   const values = [5, 2, 8, 1, 6]
   const order = values.map((_, index) => index)
-  const snapshots = [order.slice()]
-  const explanations = ['初始序列：比较相邻元素，大的向右移动']
+  const comparisons: Array<{ left: number; right: number; before: number[]; after: number[]; swapped: boolean }> = []
   for (let end = order.length - 1; end > 0; end--) {
     for (let index = 0; index < end; index++) {
-      if (values[order[index]] <= values[order[index + 1]]) continue
-      const left = values[order[index]], right = values[order[index + 1]]
-      ;[order[index], order[index + 1]] = [order[index + 1], order[index]]
-      snapshots.push(order.slice())
-      explanations.push(`交换 ${left} 和 ${right}：较大元素向右移动`)
+      const before = order.slice()
+      const left = before[index], right = before[index + 1]
+      const swapped = values[left] > values[right]
+      if (swapped) [order[index], order[index + 1]] = [right, left]
+      comparisons.push({ left, right, before, after: order.slice(), swapped })
     }
   }
-  explanations[explanations.length - 1] = '排序完成：1、2、5、6、8'
   const slotX = (index: number) => 125 + index * 205
-  const stepTime = 1.2
+  const stepTime = 1.6
+  const labelY = (value: number) => 560 - value * 38
+  const markerX = (slot: number) => slotX(slot) + 37
+  const markerY = (value: number) => labelY(value) - 39
   const nodes: SceneNode[] = [
-    { id: 'title', type: 'text', name: '标题', x: 72, y: 66, text: '冒泡排序：看见相邻交换', fontSize: 36, fill: '#f8fafc' },
-    { id: 'note', type: 'text', name: '说明', x: 72, y: 112, text: '每一次移动就是一对逆序元素交换；高度代表数值', fontSize: 19, fill: '#94a3b8' },
+    { id: 'title', type: 'text', name: '标题', x: 72, y: 66, text: '冒泡排序：逐次比较相邻数字', fontSize: 36, fill: '#f8fafc' },
+    { id: 'note', type: 'text', name: '说明', x: 72, y: 112, text: '虚线框和箭头指向正在比较的两个数；只有左边较大时才交换', fontSize: 19, fill: '#94a3b8' },
     { id: 'baseline', type: 'line', name: '基线', x: 104, y: 580, x2: 1140, y2: 580, stroke: '#475569', lineWidth: 2 },
-    { id: 'step', type: 'text', name: '步骤说明', x: 220, y: 665, text: explanations[0], fontSize: 26, fill: '#fbbf24' },
+    { id: 'step', type: 'text', name: '步骤说明', x: 150, y: 665, text: '', fontSize: 26, fill: '#fbbf24' },
   ]
-  const tracks: Track[] = [{ nodeId: 'step', property: 'text', keyframes: explanations.map((value, index) => ({ time: index * stepTime, value, easing: 'step' })) }]
+  const tracks: Track[] = [{ nodeId: 'step', property: 'text', keyframes: comparisons.flatMap(({ left, right, swapped }, index) => {
+    const a = values[left], b = values[right], time = index * stepTime
+    return [
+      { time, value: `第 ${index + 1} 次比较：${a} 和 ${b}`, easing: 'step' as const },
+      { time: time + 0.7, value: swapped ? `${a} > ${b}，交换位置` : `${a} ≤ ${b}，不交换，继续比较`, easing: 'step' as const },
+    ]
+  }).concat({ time: comparisons.length * stepTime, value: '排序完成：1、2、5、6、8', easing: 'step' }) }]
   const colors = ['#5eead4', '#60a5fa', '#c4b5fd', '#fbbf24', '#fb7185']
   values.forEach((value, index) => {
     const height = value * 38
     const barId = `bar-${value}`, labelId = `value-${value}`
     nodes.push({ id: barId, type: 'rect', name: `数值 ${value} 的柱形`, x: slotX(index), y: 580 - height, width: 138, height, radius: 10, fill: colors[index] })
     nodes.push({ id: labelId, type: 'text', name: `数值 ${value}`, x: slotX(index) + 54, y: 560 - height, text: String(value), fontSize: 30, fill: colors[index] })
-    const positions = snapshots.map(snapshot => snapshot.indexOf(index))
-    tracks.push({ nodeId: barId, property: 'x', keyframes: positions.map((position, step) => ({ time: step * stepTime, value: slotX(position), easing: 'easeInOut' })) })
-    tracks.push({ nodeId: labelId, property: 'x', keyframes: positions.map((position, step) => ({ time: step * stepTime, value: slotX(position) + 54, easing: 'easeInOut' })) })
+    const movement = (offset: number) => {
+      const frames: Track['keyframes'] = [{ time: 0, value: slotX(index) + offset, easing: 'step' }]
+      comparisons.forEach(({ before, after, swapped }, step) => {
+        if (!swapped || before.indexOf(index) === after.indexOf(index)) return
+        const time = step * stepTime
+        frames.push({ time: time + 0.75, value: slotX(before.indexOf(index)) + offset, easing: 'easeInOut' })
+        frames.push({ time: time + 1.35, value: slotX(after.indexOf(index)) + offset, easing: 'step' })
+      })
+      return frames
+    }
+    tracks.push({ nodeId: barId, property: 'x', keyframes: movement(0) })
+    tracks.push({ nodeId: labelId, property: 'x', keyframes: movement(54) })
   })
-  return base('bubble', '冒泡排序 · 相邻交换', nodes, tracks, Number((snapshots.length * stepTime).toFixed(2)))
+  for (const [side, key] of ['left', 'right'].entries()) {
+    const first = comparisons[0]
+    const initialId = side === 0 ? first.left : first.right
+    const initialSlot = first.before.indexOf(initialId)
+    const boxId = `compare-box-${key}`, arrowId = `compare-arrow-${key}`
+    nodes.push({ id: boxId, type: 'rect', name: `比较标记 ${key}`, x: markerX(initialSlot), y: markerY(values[initialId]), width: 64, height: 50, radius: 6, fill: '#00000000', stroke: '#fbbf24', lineWidth: 3, lineDash: [8, 6], zIndex: 10 })
+    nodes.push({ id: arrowId, type: 'arrow', name: `比较箭头 ${key}`, x: markerX(initialSlot) + 32, y: markerY(values[initialId]) - 53, x2: markerX(initialSlot) + 32, y2: markerY(values[initialId]) - 12, stroke: '#fbbf24', lineWidth: 3, zIndex: 10 })
+    const boxX: Track['keyframes'] = [], boxY: Track['keyframes'] = [], opacity: Track['keyframes'] = []
+    comparisons.forEach((comparison, step) => {
+      const id = side === 0 ? comparison.left : comparison.right
+      const time = step * stepTime
+      const startX = markerX(comparison.before.indexOf(id))
+      const endX = markerX(comparison.after.indexOf(id))
+      boxX.push({ time, value: startX, easing: 'step' })
+      boxY.push({ time, value: markerY(values[id]), easing: 'step' })
+      if (comparison.swapped) {
+        boxX.push({ time: time + 0.75, value: startX, easing: 'easeInOut' })
+        boxX.push({ time: time + 1.35, value: endX, easing: 'step' })
+      }
+      opacity.push({ time, value: 1, easing: 'step' })
+      opacity.push({ time: time + 1.48, value: 1, easing: 'step' })
+      opacity.push({ time: time + 1.5, value: 0, easing: 'step' })
+    })
+    tracks.push({ nodeId: boxId, property: 'x', keyframes: boxX }, { nodeId: boxId, property: 'y', keyframes: boxY }, { nodeId: boxId, property: 'opacity', keyframes: opacity })
+    tracks.push({ nodeId: arrowId, property: 'x', keyframes: boxX.map(frame => ({ ...frame, value: Number(frame.value) + 32 })) })
+    tracks.push({ nodeId: arrowId, property: 'x2', keyframes: boxX.map(frame => ({ ...frame, value: Number(frame.value) + 32 })) })
+    tracks.push({ nodeId: arrowId, property: 'y', keyframes: boxY.map(frame => ({ ...frame, value: Number(frame.value) - 53 })) })
+    tracks.push({ nodeId: arrowId, property: 'y2', keyframes: boxY.map(frame => ({ ...frame, value: Number(frame.value) - 12 })) })
+    tracks.push({ nodeId: arrowId, property: 'opacity', keyframes: opacity.map(frame => ({ ...frame })) })
+  }
+  return base('bubble', '冒泡排序 · 逐次比较', nodes, tracks, comparisons.length * stepTime + 0.4)
 }
 
 export const templates: Record<string, () => Project> = {
