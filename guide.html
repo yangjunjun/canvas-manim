@@ -19,7 +19,7 @@
         <a href="#start">先看这里</a>
         <a href="#first-animation">第一个动画</a>
         <a href="#parameters">让观众调参数</a>
-        <a href="#templates">三个现成模板</a>
+        <a href="#templates">六个现成模板</a>
         <span class="nav-caption">完成作品</span>
         <a href="#export">保存与导出</a>
         <a href="#sdk">用代码嵌入网页</a>
@@ -49,13 +49,13 @@
           <div class="callout"><strong>表达式里能写什么？</strong><span><code>t</code> 表示播放秒数，<code>p1</code> 是参数 ID，<code>x</code> 用于函数曲线的横坐标。支持 <code>+ - * / ^</code>、括号、<code>sin</code>、<code>cos</code>、<code>sqrt</code> 等常用函数；不能输入任意 JavaScript。</span></div>
         </section>
 
-        <section class="doc-section" id="templates"><div class="section-heading"><span class="chapter">03 / 现成内容</span><h2>先改模板，再做自己的作品</h2><p>编辑器左侧「快速开始」提供三个能直接播放、修改、导出的示例。切换模板会替换当前项目，请先保存自己的改动。</p></div>
-          <div class="template-cards"><article><span class="template-glyph teal">∿</span><h3>正弦函数</h3><p>播放时观察运动点与图像。在右侧调「振幅」和「频率」，看看曲线和读数如何同步变化。</p></article><article><span class="template-glyph blue">↗</span><h3>抛体运动</h3><p>拖动「初速度」等参数，观察轨迹、位置和速度。示例使用忽略空气阻力的理想模型。</p></article><article><span class="template-glyph amber">⌕</span><h3>二分查找</h3><p>用播放进度逐步查看比较位置、左右边界和最后找到的目标。</p></article></div>
+        <section class="doc-section" id="templates"><div class="section-heading"><span class="chapter">03 / 现成内容</span><h2>先改模板，再做自己的作品</h2><p>编辑器左侧「快速开始」提供六个能直接播放、修改、导出的示例。切换模板会替换当前项目，请先保存自己的改动。</p></div>
+          <div class="template-cards"><article><span class="template-glyph teal">∿</span><h3>正弦函数</h3><p>播放时观察运动点与图像。在右侧调「振幅」和「频率」，看看曲线和读数如何同步变化。</p></article><article><span class="template-glyph teal">◯</span><h3>单位圆</h3><p>改变显示半径和角速度，观察旋转点、正弦与余弦投影如何同步变化。</p></article><article><span class="template-glyph blue">↗</span><h3>抛体运动</h3><p>拖动「初速度」等参数，观察轨迹、位置和速度。示例使用忽略空气阻力的理想模型。</p></article><article><span class="template-glyph blue">◡</span><h3>单摆运动</h3><p>调整摆长、初始摆角和重力加速度，查看小角度近似模型下的摆球位置与周期。</p></article><article><span class="template-glyph amber">⌕</span><h3>二分查找</h3><p>用播放进度逐步查看比较位置、左右边界和最后找到的目标。</p></article><article><span class="template-glyph amber">▥</span><h3>冒泡排序</h3><p>拖动时间线观察相邻逆序元素交换，柱形最终按数值从小到大排列。</p></article></div>
           <p class="note">要自己画函数图像：先在「对象图层」添加「坐标系」，再添加「函数曲线」。选中曲线后，在检查器的「函数 y = f(x)」里输入如 <code>sin(x)</code>。</p>
         </section>
 
         <section class="doc-section" id="export"><div class="section-heading"><span class="chapter">04 / 完成作品</span><h2>保存项目，或者导出画面</h2><p>“保存项目”和“导出”用途不同：前者用于下次继续编辑，后者用于课件、文章和视频。</p></div>
-          <div class="export-list"><div><strong>保存项目</strong><p>顶部点击「保存项目」，下载 <code>.cmanim</code> 文件。下次点「打开」选这个文件，继续修改对象、关键帧和参数。</p></div><div><strong>当前帧 PNG</strong><p>将进度拖到想要的时刻，右侧「导出作品」点「当前帧 PNG」。适合插入 PPT 或文章。</p></div><div><strong>视频 / 逐帧 ZIP</strong><p>在支持录制的浏览器中点「视频 WebM」或「视频 MP4」；按钮不可用时选「逐帧 ZIP」。首版没有音轨，逐帧 ZIP 最多 360 帧。</p></div></div>
+          <div class="export-list"><div><strong>保存项目</strong><p>顶部点击「保存项目」，下载 <code>.cmanim</code> 文件。下次点「打开」选这个文件，继续修改对象、关键帧和参数。</p></div><div><strong>当前帧 PNG</strong><p>将进度拖到想要的时刻，点击顶部最右侧「导出作品」并选择「当前帧 PNG」。适合插入 PPT 或文章。</p></div><div><strong>视频 / 逐帧 ZIP</strong><p>在「导出作品」下拉菜单中选择浏览器支持的「视频 WebM」或「视频 MP4」；按钮不可用时选「逐帧 ZIP」。首版没有音轨，逐帧 ZIP 最多 360 帧。</p></div></div>
         </section>
 
         <section class="doc-section" id="sdk"><div class="section-heading"><span class="chapter">05 / 编程式 SDK</span><h2>在网页里嵌入动画</h2><p>如果你会写前端代码，可以直接创建项目数据并挂载播放器。SDK 与编辑器使用同一格式；先在编辑器做作品，再用 SDK 加载也可以。</p></div>

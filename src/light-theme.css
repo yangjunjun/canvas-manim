@@ -25,6 +25,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .ghost:hover { background: #f6f8fa; border-color: #afb8c1; color: #1f2328; }
 .help-link { background: #f6f8fa; border-color: #d8dee4; color: #24292f; }
 .help-link:hover { background: #eef2f6; color: #0969da; border-color: #c9d1d9; }
+.export-dropdown { position: relative; flex: none; }
+.export-trigger { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 34px; padding: 0 13px; border: 1px solid #171717; border-radius: 7px; background: #171717; color: #fff; font-size: 12px; font-weight: 700; white-space: nowrap; box-shadow: 0 1px 2px #1f232826; }
+.export-trigger:hover:not(:disabled), .export-trigger[aria-expanded="true"] { background: #343434; border-color: #343434; }
+.export-chevron { margin-left: 3px; font-size: 16px; line-height: 1; }
+.export-dropdown-panel { position: absolute; top: calc(100% + 9px); right: 0; z-index: 40; width: 252px; padding: 5px; border: 1px solid #d0d7de; border-radius: 9px; background: #fff; box-shadow: 0 12px 32px #1f23282b, 0 2px 6px #1f232812; }
+.export-option { display: flex; align-items: center; gap: 11px; width: 100%; min-height: 55px; padding: 8px 10px; border: 0; border-radius: 6px; background: transparent; color: #24292f; text-align: left; }
+.export-option:hover:not(:disabled), .export-option:focus-visible { background: #f3f6fa; }
+.export-option-icon { display: grid; place-items: center; flex: none; width: 29px; height: 29px; border: 1px solid #d8dee4; border-radius: 6px; color: #57606a; background: #fff; font-size: 15px; }
+.export-option strong { display: block; font-size: 12px; line-height: 1.4; }
+.export-option small { display: block; margin-top: 2px; color: #6e7781; font-size: 10px; line-height: 1.4; }
+.export-option:disabled { opacity: .5; }
 
 .main-layout { --left-size: 244px; --right-size: 300px; display: grid; grid-template-columns: var(--left-size) minmax(0, 1fr) var(--right-size); min-height: calc(100vh - 100px); transition: grid-template-columns .2s ease; }
 .main-layout.left-collapsed { --left-size: 0px; }
@@ -97,14 +108,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .project-settings { color: #57606a; border-bottom-color: #d8dee4; }
 .project-settings summary { background: #fff; color: #24292f; }
 .project-settings summary:hover { background: #f6f8fa; }
-.params-panel, .export-panel { border-top-color: #d8dee4; }
+.params-panel { border-top-color: #d8dee4; }
 .param-item { border-bottom-color: #eaeef2; }
 .param-head { color: #24292f; }
 .param-head span { color: #0969da; }
 .param-item input[type=range] { accent-color: #0969da; }
 .param-item details { color: #6e7781; }
-.export-grid button { color: #24292f; background: #fff; border-color: #d0d7de; }
-.export-grid button:hover:not(:disabled) { border-color: #0969da; background: #eef5ff; color: #0969da; }
 .statusbar { color: #6e7781; background: #fff; border-top-color: #d8dee4; }
 .status-dot { background: #1a7f37; box-shadow: none; }
 .status-right { color: #8c959f; }

@@ -22,6 +22,8 @@ pnpm run check:sdk
 浏览器冒烟测试需要本地开发服务器及 Chromium。设置 `CANVAS_MANIM_CHROMIUM` 为本机 Chromium 可执行文件路径后运行 `pnpm test:browser`。
 两条创作路径的操作步骤见 [使用指南](docs/usage.md)。
 
+编辑器左侧「快速开始」内置六个可编辑项目：正弦函数、单位圆、抛体运动、单摆运动、二分查找和冒泡排序。新增三个项目在 SDK 中分别可通过 `templates.unitCircle()`、`templates.pendulum()`、`templates.bubbleSort()` 创建。
+
 ## SDK 使用
 
 本仓库开发时可以直接从 `src/sdk.ts` 导入；`pnpm build` 同时生成可供其他前端项目引用的 `dist-lib/` 模块、声明文件和样式。嵌入其他项目时需同时引入 `canvas-manim/style.css`，以加载离线中文字体。

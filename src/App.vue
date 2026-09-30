@@ -13,12 +13,15 @@ const sceneId = ref(project.value.scenes[0].id)
 const canvas = ref<HTMLCanvasElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const imageInput = ref<HTMLInputElement | null>(null)
+const exportMenu = ref<HTMLElement | null>(null)
+const exportButton = ref<HTMLButtonElement | null>(null)
 const player = ref<Player | null>(null)
 const selectedId = ref<string | null>(null)
 const selectedTrack = ref('x')
 const currentTime = ref(0)
 const playing = ref(false)
 const busy = ref(false)
+const exportOpen = ref(false)
 const leftCollapsed = ref(typeof window !== 'undefined' && window.innerWidth < 900)
 const rightCollapsed = ref(typeof window !== 'undefined' && window.innerWidth < 900)
 const message = ref('选择模板或从空白场景开始。')
@@ -337,6 +340,7 @@ async function importImage(event: Event): Promise<void> {
 }
 
 async function output(kind: 'png' | 'video' | 'frames'): Promise<void> {
+  exportOpen.value = false
   busy.value = true; message.value = '正在准备资源并导出…'
   try {
     if (kind === 'png') download(await exportPng(project.value, sceneId.value, currentTime.value, paramValues.value), `${scene.value.name}.png`)
@@ -348,6 +352,15 @@ async function output(kind: 'png' | 'video' | 'frames'): Promise<void> {
     message.value = '导出完成'
   } catch (error) { announce(error) }
   finally { busy.value = false }
+}
+
+function toggleExportMenu(): void {
+  exportOpen.value = !exportOpen.value
+  if (exportOpen.value) nextTick(() => exportMenu.value?.querySelector<HTMLButtonElement>('.export-option:not(:disabled)')?.focus())
+}
+
+function closeExportOnOutside(event: PointerEvent): void {
+  if (exportOpen.value && !exportMenu.value?.contains(event.target as Node)) exportOpen.value = false
 }
 
 function canvasPoint(event: PointerEvent): [number, number] {
@@ -394,6 +407,12 @@ function canvasPointerUp(): void {
 }
 
 function keyboard(event: KeyboardEvent): void {
+  if (event.key === 'Escape' && exportOpen.value) {
+    event.preventDefault()
+    exportOpen.value = false
+    exportButton.value?.focus()
+    return
+  }
   const target = event.target as HTMLElement
   if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); event.shiftKey ? redo() : undo() }
@@ -411,8 +430,9 @@ onMounted(async () => {
     player.value.onError = announce
   }
   window.addEventListener('keydown', keyboard)
+  window.addEventListener('pointerdown', closeExportOnOutside)
 })
-onBeforeUnmount(() => { window.removeEventListener('keydown', keyboard); player.value?.destroy() })
+onBeforeUnmount(() => { window.removeEventListener('keydown', keyboard); window.removeEventListener('pointerdown', closeExportOnOutside); player.value?.destroy() })
 </script>
 
 <template>
@@ -433,6 +453,14 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', keyboard); player.
         <button class="ghost" @click="newProject('blank')">新建</button>
         <button class="ghost" @click="fileInput?.click()">打开</button>
         <button class="ghost" @click="save">保存项目</button>
+        <div ref="exportMenu" class="export-dropdown">
+          <button ref="exportButton" class="export-trigger" type="button" :disabled="busy" :aria-expanded="exportOpen" aria-controls="export-dropdown-panel" @click="toggleExportMenu"><span aria-hidden="true">⇩</span>导出作品<span class="export-chevron" aria-hidden="true">⌄</span></button>
+          <div v-if="exportOpen" id="export-dropdown-panel" class="export-dropdown-panel" aria-label="导出格式">
+            <button class="export-option" type="button" :disabled="busy" @click="output('png')"><span class="export-option-icon" aria-hidden="true">▧</span><span><strong>当前帧 PNG</strong><small>保存当前播放时刻</small></span></button>
+            <button class="export-option" type="button" :disabled="busy || !supportVideo" :title="supportVideo || '浏览器不支持视频录制'" @click="output('video')"><span class="export-option-icon" aria-hidden="true">▶</span><span><strong>视频 {{ supportVideo?.includes('mp4') ? 'MP4' : 'WebM' }}</strong><small>{{ supportVideo ? '导出完整场景动画' : '当前浏览器不支持录制' }}</small></span></button>
+            <button class="export-option" type="button" :disabled="busy" @click="output('frames')"><span class="export-option-icon" aria-hidden="true">▦</span><span><strong>逐帧 ZIP</strong><small>下载 PNG 图片序列</small></span></button>
+          </div>
+        </div>
         <input ref="fileInput" type="file" accept=".cmanim,.json,application/zip,application/json" hidden @change="openFile" />
         <input ref="imageInput" type="file" accept="image/png,image/jpeg,image/webp" hidden @change="importImage" />
       </div>
@@ -445,8 +473,11 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', keyboard); player.
         <a class="starter-link" href="./guide.html" target="_blank" rel="noopener noreferrer"><span>第一次使用？</span><strong>跟着指南完成第一个动画 →</strong></a>
         <div class="template-list">
           <button @click="newProject('math')"><span class="template-icon teal">∿</span><span>正弦函数<small>图像与切线</small></span></button>
+          <button @click="newProject('unitCircle')"><span class="template-icon teal">◯</span><span>单位圆<small>角度与三角函数</small></span></button>
           <button @click="newProject('physics')"><span class="template-icon blue">↗</span><span>抛体运动<small>轨迹与速度</small></span></button>
+          <button @click="newProject('pendulum')"><span class="template-icon blue">◡</span><span>单摆运动<small>周期与摆角</small></span></button>
           <button @click="newProject('binary')"><span class="template-icon amber">⌕</span><span>二分查找<small>算法逐步演示</small></span></button>
+          <button @click="newProject('bubbleSort')"><span class="template-icon amber">▥</span><span>冒泡排序<small>相邻交换过程</small></span></button>
         </div>
         <div class="section-title"><span>场景</span><button title="新增场景" @click="addScene">＋</button></div>
         <div class="scene-list"><button v-for="item in project.scenes" :key="item.id" :class="{ active: item.id === sceneId }" @click="chooseScene(item.id)">▣ &nbsp;{{ item.name }}</button></div>
@@ -491,7 +522,6 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', keyboard); player.
           <template v-if="selected.type === 'text'"><label>数值读数表达式<input :value="selected.valueExpression ?? ''" placeholder="例如 speed*t" @change="editNodeString('valueExpression', $event)" /></label><div class="field-row"><label>前缀<input :value="selected.prefix ?? ''" @change="editNodeString('prefix', $event)" /></label><label>后缀<input :value="selected.suffix ?? ''" @change="editNodeString('suffix', $event)" /></label></div><label>小数位<input type="number" min="0" max="8" :value="selected.precision ?? 2" @change="editNodeNumber('precision', $event)" /></label></template>
         </div><div v-else class="inspector-empty"><span>◇</span><p>选择画布上的对象或左侧图层，在这里调整属性。</p></div>
         <div class="params-panel"><div class="section-title"><span>场景参数</span><button title="新增参数" @click="addParameter">＋</button></div><div v-for="param in scene.params" :key="param.id" class="param-item"><div class="param-head"><strong>{{ param.label }}</strong><span>{{ (paramValues[param.id] ?? param.value).toFixed(2) }} {{ param.unit }}</span></div><input type="range" :min="param.min" :max="param.max" :step="param.step" :value="paramValues[param.id] ?? param.value" :aria-label="param.label" @input="changeParam(param.id, Number(($event.target as HTMLInputElement).value))" /><details><summary>参数定义</summary><label>名称<input :value="param.label" @change="editParam(param.id, 'label', ($event.target as HTMLInputElement).value)" /></label><div class="field-row"><label>默认值<input type="number" :value="param.value" @change="editParam(param.id, 'value', ($event.target as HTMLInputElement).value)" /></label><label>单位<input :value="param.unit" @change="editParam(param.id, 'unit', ($event.target as HTMLInputElement).value)" /></label></div><div class="field-row"><label>最小<input type="number" :value="param.min" @change="editParam(param.id, 'min', ($event.target as HTMLInputElement).value)" /></label><label>最大<input type="number" :value="param.max" @change="editParam(param.id, 'max', ($event.target as HTMLInputElement).value)" /></label></div><label>步长<input type="number" min="0.001" step="0.001" :value="param.step" @change="editParam(param.id, 'step', ($event.target as HTMLInputElement).value)" /></label></details></div><p v-if="!scene.params.length" class="empty-note">添加参数，让作品可交互。</p></div>
-        <div class="export-panel"><div class="section-title"><span>导出作品</span></div><div class="export-grid"><button :disabled="busy" @click="output('png')">▧ <span>当前帧 PNG</span></button><button :disabled="busy || !supportVideo" :title="supportVideo || '浏览器不支持视频录制'" @click="output('video')">▶ <span>视频 {{ supportVideo?.includes('mp4') ? 'MP4' : 'WebM' }}</span></button><button :disabled="busy" @click="output('frames')">▦ <span>逐帧 ZIP</span></button></div></div>
       </aside>
     </main>
     <footer class="statusbar"><span class="status-dot"></span><span>{{ message }}</span><span class="status-right">{{ busy ? '正在处理…' : '本地运行 · 无需登录' }}</span></footer>

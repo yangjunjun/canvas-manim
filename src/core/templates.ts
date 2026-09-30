@@ -83,8 +83,96 @@ function binarySearch(): Project {
   return base('binary', '二分查找 · 缩小搜索区间', nodes, tracks, 6)
 }
 
+function unitCircle(): Project {
+  const project = base('unit-circle', '单位圆 · 三角函数投影', [
+    { id: 'title', type: 'text', name: '标题', x: 72, y: 66, text: '单位圆：看见 sin 与 cos', fontSize: 36, fill: '#f8fafc' },
+    { id: 'note', type: 'text', name: '说明', x: 72, y: 112, text: '旋转半径，观察横、纵投影随角度变化', fontSize: 19, fill: '#94a3b8' },
+    { id: 'x-axis', type: 'line', name: '横轴', x: 165, y: 390, x2: 690, y2: 390, stroke: '#64748b', lineWidth: 2 },
+    { id: 'y-axis', type: 'line', name: '纵轴', x: 420, y: 145, x2: 420, y2: 635, stroke: '#64748b', lineWidth: 2 },
+    { id: 'circle', type: 'circle', name: '圆周', x: 420, y: 390, radius: 170, fill: '#00000000', stroke: '#64748b', lineWidth: 2, bindings: { radius: 'r' } },
+    { id: 'radius', type: 'line', name: '旋转半径', x: 420, y: 390, x2: 590, y2: 390, stroke: '#e2e8f0', lineWidth: 3, bindings: { x2: '420+r*cos(speed*t)', y2: '390-r*sin(speed*t)' } },
+    { id: 'cos-projection', type: 'line', name: '余弦投影', x: 420, y: 390, x2: 590, y2: 390, stroke: '#5eead4', lineWidth: 6, bindings: { x2: '420+r*cos(speed*t)' } },
+    { id: 'sin-projection', type: 'line', name: '正弦投影', x: 590, y: 390, x2: 590, y2: 390, stroke: '#fbbf24', lineWidth: 6, bindings: { x: '420+r*cos(speed*t)', x2: '420+r*cos(speed*t)', y2: '390-r*sin(speed*t)' } },
+    { id: 'foot', type: 'point', name: '投影点', x: 590, y: 390, radius: 6, fill: '#5eead4', bindings: { x: '420+r*cos(speed*t)' } },
+    { id: 'dot', type: 'point', name: '圆周运动点', x: 590, y: 390, radius: 12, fill: '#fbbf24', bindings: { x: '420+r*cos(speed*t)', y: '390-r*sin(speed*t)' } },
+    { id: 'formula', type: 'formula', name: '投影关系', x: 760, y: 242, text: 'x=r\\cos\\theta,\\quad y=r\\sin\\theta', fontSize: 30, fill: '#e2e8f0' },
+    { id: 'angle', type: 'text', name: '当前角度', x: 760, y: 337, text: '', fontSize: 25, fill: '#e2e8f0', valueExpression: 'speed*t', prefix: 'θ = ', suffix: ' rad', precision: 2 },
+    { id: 'cos-value', type: 'text', name: '余弦值', x: 760, y: 395, text: '', fontSize: 25, fill: '#5eead4', valueExpression: 'cos(speed*t)', prefix: 'cos θ = ', precision: 3 },
+    { id: 'sin-value', type: 'text', name: '正弦值', x: 760, y: 453, text: '', fontSize: 25, fill: '#fbbf24', valueExpression: 'sin(speed*t)', prefix: 'sin θ = ', precision: 3 },
+    { id: 'model', type: 'text', name: '模型说明', x: 760, y: 532, text: '这里的 r 只控制画面大小，读数为单位圆比值。', fontSize: 18, fill: '#94a3b8' },
+  ])
+  project.scenes[0].params = [
+    { id: 'r', label: '显示半径', value: 170, min: 110, max: 215, step: 5, unit: 'px' },
+    { id: 'speed', label: '角速度', value: 0.8, min: 0.3, max: 1.2, step: 0.1, unit: 'rad/s' },
+  ]
+  return project
+}
+
+function pendulum(): Project {
+  const swing = 'angle0*cos(sqrt(g/length)*t)'
+  const bobX = `420+100*length*sin(${swing})`
+  const bobY = `190+100*length*cos(${swing})`
+  const project = base('pendulum', '单摆运动 · 周期与摆角', [
+    { id: 'title', type: 'text', name: '标题', x: 72, y: 66, text: '单摆：周期从哪里来？', fontSize: 36, fill: '#f8fafc' },
+    { id: 'note', type: 'text', name: '模型条件', x: 72, y: 112, text: '小角度近似；忽略空气阻力与支点摩擦', fontSize: 19, fill: '#94a3b8' },
+    { id: 'support', type: 'line', name: '支架', x: 278, y: 165, x2: 562, y2: 165, stroke: '#64748b', lineWidth: 8 },
+    { id: 'rest-line', type: 'line', name: '平衡位置', x: 420, y: 190, x2: 420, y2: 465, stroke: '#475569', lineWidth: 2 },
+    { id: 'rod', type: 'line', name: '摆线', x: 420, y: 190, x2: 420, y2: 390, stroke: '#e2e8f0', lineWidth: 4, bindings: { x2: bobX, y2: bobY } },
+    { id: 'pivot', type: 'point', name: '支点', x: 420, y: 190, radius: 9, fill: '#94a3b8' },
+    { id: 'bob', type: 'point', name: '摆球', x: 420, y: 390, radius: 27, fill: '#60a5fa', bindings: { x: bobX, y: bobY } },
+    { id: 'formula', type: 'formula', name: '小角度解', x: 716, y: 250, text: '\\theta(t)\\approx\\theta_0\\cos(\\sqrt{g/L}\\,t)', fontSize: 28, fill: '#e2e8f0' },
+    { id: 'period-formula', type: 'formula', name: '周期公式', x: 716, y: 322, text: 'T\\approx 2\\pi\\sqrt{L/g}', fontSize: 29, fill: '#e2e8f0' },
+    { id: 'angle', type: 'text', name: '当前摆角', x: 716, y: 427, text: '', fontSize: 25, fill: '#60a5fa', valueExpression: swing, prefix: '摆角 θ = ', suffix: ' rad', precision: 3 },
+    { id: 'period', type: 'text', name: '近似周期', x: 716, y: 490, text: '', fontSize: 25, fill: '#fbbf24', valueExpression: '2*pi*sqrt(length/g)', prefix: '周期 T ≈ ', suffix: ' s', precision: 2 },
+    { id: 'hint', type: 'text', name: '参数提示', x: 716, y: 552, text: '改变摆长，观察周期和运动同时变化。', fontSize: 18, fill: '#94a3b8' },
+  ])
+  project.scenes[0].params = [
+    { id: 'length', label: '摆长 L', value: 2, min: 1.2, max: 2.5, step: 0.1, unit: 'm' },
+    { id: 'angle0', label: '初始摆角', value: 0.5, min: 0.1, max: 0.6, step: 0.05, unit: 'rad' },
+    { id: 'g', label: '重力加速度', value: 9.8, min: 8, max: 11, step: 0.1, unit: 'm/s²' },
+  ]
+  return project
+}
+
+function bubbleSort(): Project {
+  const values = [5, 2, 8, 1, 6]
+  const order = values.map((_, index) => index)
+  const snapshots = [order.slice()]
+  const explanations = ['初始序列：比较相邻元素，大的向右移动']
+  for (let end = order.length - 1; end > 0; end--) {
+    for (let index = 0; index < end; index++) {
+      if (values[order[index]] <= values[order[index + 1]]) continue
+      const left = values[order[index]], right = values[order[index + 1]]
+      ;[order[index], order[index + 1]] = [order[index + 1], order[index]]
+      snapshots.push(order.slice())
+      explanations.push(`交换 ${left} 和 ${right}：较大元素向右移动`)
+    }
+  }
+  explanations[explanations.length - 1] = '排序完成：1、2、5、6、8'
+  const slotX = (index: number) => 125 + index * 205
+  const stepTime = 1.2
+  const nodes: SceneNode[] = [
+    { id: 'title', type: 'text', name: '标题', x: 72, y: 66, text: '冒泡排序：看见相邻交换', fontSize: 36, fill: '#f8fafc' },
+    { id: 'note', type: 'text', name: '说明', x: 72, y: 112, text: '每一次移动就是一对逆序元素交换；高度代表数值', fontSize: 19, fill: '#94a3b8' },
+    { id: 'baseline', type: 'line', name: '基线', x: 104, y: 580, x2: 1140, y2: 580, stroke: '#475569', lineWidth: 2 },
+    { id: 'step', type: 'text', name: '步骤说明', x: 220, y: 665, text: explanations[0], fontSize: 26, fill: '#fbbf24' },
+  ]
+  const tracks: Track[] = [{ nodeId: 'step', property: 'text', keyframes: explanations.map((value, index) => ({ time: index * stepTime, value, easing: 'step' })) }]
+  const colors = ['#5eead4', '#60a5fa', '#c4b5fd', '#fbbf24', '#fb7185']
+  values.forEach((value, index) => {
+    const height = value * 38
+    const barId = `bar-${value}`, labelId = `value-${value}`
+    nodes.push({ id: barId, type: 'rect', name: `数值 ${value} 的柱形`, x: slotX(index), y: 580 - height, width: 138, height, radius: 10, fill: colors[index] })
+    nodes.push({ id: labelId, type: 'text', name: `数值 ${value}`, x: slotX(index) + 54, y: 560 - height, text: String(value), fontSize: 30, fill: colors[index] })
+    const positions = snapshots.map(snapshot => snapshot.indexOf(index))
+    tracks.push({ nodeId: barId, property: 'x', keyframes: positions.map((position, step) => ({ time: step * stepTime, value: slotX(position), easing: 'easeInOut' })) })
+    tracks.push({ nodeId: labelId, property: 'x', keyframes: positions.map((position, step) => ({ time: step * stepTime, value: slotX(position) + 54, easing: 'easeInOut' })) })
+  })
+  return base('bubble', '冒泡排序 · 相邻交换', nodes, tracks, Number((snapshots.length * stepTime).toFixed(2)))
+}
+
 export const templates: Record<string, () => Project> = {
-  math, physics, binary: binarySearch,
+  math, unitCircle, physics, pendulum, binary: binarySearch, bubbleSort,
 }
 
 export function createBlankProject(): Project {
