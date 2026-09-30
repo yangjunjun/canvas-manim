@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Canvas Manim SDK 示例</title>
+    <style>
+      body{margin:0;background:#0b101a;color:#e5eef8;font-family:system-ui,sans-serif;padding:32px}
+      main{max-width:1100px;margin:auto}h1{font-size:24px}canvas{display:block;width:100%;border:1px solid #334155;border-radius:12px}
+      .controls{display:flex;align-items:center;gap:16px;margin-top:20px}button{padding:9px 16px;background:#5eead4;border:0;border-radius:8px;color:#082422;cursor:pointer}
+      input[type=range]{flex:1;accent-color:#5eead4}a{color:#5eead4}
+    </style>
+  </head>
+  <body>
+    <main>
+      <a href="/">← 返回可视化编辑器</a>
+      <h1>编程式 SDK 示例</h1>
+      <p>这个页面直接导入工具库，创建播放器、修改参数并控制时间。</p>
+      <div id="stage"></div>
+      <div class="controls"><button id="toggle">播放</button><label for="amp">振幅</label><input id="amp" type="range" min="0.2" max="1.8" step="0.1" value="1" /><input id="seek" type="range" min="0" max="8" step="0.01" value="0" aria-label="时间" /><span id="time">0.00s</span></div>
+    </main>
+    <script type="module">
+      import { mountPlayer, templates } from '/src/sdk.ts'
+      const project = templates.math()
+      const player = mountPlayer(document.querySelector('#stage'), project)
+      const toggle = document.querySelector('#toggle')
+      const seek = document.querySelector('#seek')
+      const time = document.querySelector('#time')
+      player.onChange = (seconds, playing) => { seek.value = String(seconds); time.textContent = `${seconds.toFixed(2)}s`; toggle.textContent = playing ? '暂停' : '播放' }
+      toggle.onclick = () => player.isPlaying ? player.pause() : player.play()
+      document.querySelector('#amp').oninput = event => player.setParams({ amp: Number(event.target.value) })
+      seek.oninput = event => player.seek(Number(event.target.value))
+      window.addEventListener('beforeunload', () => player.destroy())
+    </script>
+  </body>
+</html>

@@ -1,0 +1,37 @@
+{
+  "name": "canvas-manim",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "files": ["dist-lib"],
+  "exports": {
+    ".": {
+      "types": "./dist-lib/types/sdk.d.ts",
+      "import": "./dist-lib/canvas-manim.js"
+    },
+    "./style.css": "./dist-lib/canvas-manim.css"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build && pnpm run build:lib",
+    "build:lib": "tsc -p tsconfig.lib.json && node scripts/fix-dts.mjs && vite build --config vite.lib.config.ts",
+    "check": "vue-tsc --noEmit",
+    "check:sdk": "tsc --noEmit --strict --module ESNext --moduleResolution Bundler --target ES2022 --lib ES2022,DOM,DOM.Iterable tests/sdk-consumer.ts",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "test:browser": "node tests/browser-smoke.mjs"
+  },
+  "dependencies": {
+    "@fontsource/noto-sans-sc": "^5.3.0",
+    "fflate": "^0.8.2",
+    "mathjax-full": "^3.2.2",
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.0",
+    "playwright-core": "^1.63.0",
+    "typescript": "^5.8.0",
+    "vite": "^7.0.0",
+    "vue-tsc": "^3.0.0"
+  },
+  "packageManager": "pnpm@12.4.2+sha512.08adc6613180275c7c9edada39dcf08c9c61ad4e7eaf330a4f3461f102b0f907423454d117f98e72d47fef0616070644d7bffc973a6a57f5090a6d7c368b07c9"
+}

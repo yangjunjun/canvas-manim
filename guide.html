@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Canvas Manim 使用指南：从第一个动画到时间线、参数、导出和编程式接入。" />
+    <title>使用指南 · Canvas Manim</title>
+    <link rel="stylesheet" href="/src/guide.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="./"><span class="brand-mark">◈</span><span>Canvas Manim<small>使用指南</small></span></a>
+      <a class="header-action" href="./">返回编辑器 <span aria-hidden="true">↗</span></a>
+    </header>
+
+    <div class="page-layout">
+      <nav class="side-nav" aria-label="文档目录">
+        <span class="nav-caption">开始使用</span>
+        <a href="#start">先看这里</a>
+        <a href="#first-animation">第一个动画</a>
+        <a href="#parameters">让观众调参数</a>
+        <a href="#templates">三个现成模板</a>
+        <span class="nav-caption">完成作品</span>
+        <a href="#export">保存与导出</a>
+        <a href="#sdk">用代码嵌入网页</a>
+        <a href="#faq">常见问题</a>
+      </nav>
+
+      <main class="content">
+        <section class="hero" id="start">
+          <div class="hero-copy"><p class="eyebrow">CANVAS MANIM / GUIDE</p><h1>从零做出你的<br /><em>第一个科普动画</em></h1><p class="lead">不需要先学代码。跟着下面的步骤，在编辑器里画一个会移动的小球，再试试数学、物理和算法模板。</p><div class="hero-actions"><a class="primary-action" href="./">打开编辑器 <span aria-hidden="true">→</span></a><a class="secondary-action" href="#first-animation">开始 5 分钟教程 ↓</a></div></div>
+          <div class="hero-art" aria-hidden="true"><div class="art-grid"></div><div class="art-path"></div><span class="art-ball"></span><span class="art-start">t = 0s</span><span class="art-end">t = 2s</span><div class="art-timeline"><span></span><i></i><span></span></div></div>
+        </section>
+
+        <section class="overview" aria-label="学习路径"><div><span class="overview-number">01</span><strong>选内容</strong><small>空白场景或模板</small></div><div><span class="overview-number">02</span><strong>做变化</strong><small>对象、关键帧、参数</small></div><div><span class="overview-number">03</span><strong>带走作品</strong><small>保存项目或导出视频</small></div></section>
+
+        <section class="doc-section" id="first-animation"><div class="section-heading"><span class="chapter">01 / 可视化编辑器</span><h2>做一个会移动的小球</h2><p>这个练习只用编辑器操作：创建圆形 → 设置两个位置 → 播放。完成后你就理解了场景、对象和时间线的关系。</p></div>
+          <ol class="steps">
+            <li><span class="step-index">01</span><div><h3>打开空白项目</h3><p>点击顶部的<strong>「新建」</strong>。左侧是对象图层，中间是画布和时间线，右侧是检查器。此时画布为空是正常的。</p></div></li>
+            <li><span class="step-index">02</span><div><h3>添加圆形</h3><p>在左侧<strong>「对象图层」→「＋ 添加」</strong>选择<strong>「圆形」</strong>。新圆形会被选中；你可以拖动画布上的圆，或在右侧直接修改 X、Y 位置和颜色。</p></div></li>
+            <li><span class="step-index">03</span><div><h3>放置起点关键帧</h3><p>保持圆形选中。在中间时间线把动画属性选为<strong>「X 位置」</strong>，播放进度拖到 <code>0.00 s</code>，点击<strong>「＋ 关键帧」</strong>。时间线上会出现一枚菱形。</p></div></li>
+            <li><span class="step-index">04</span><div><h3>放置终点关键帧</h3><p>把进度拖到 <code>2.00 s</code>，再点一次<strong>「＋ 关键帧」</strong>。在新关键帧右侧的数值框输入 <code>900</code> 并按 Enter。现在点击画布下方的<strong>播放按钮「▶」</strong>，小球会向右移动。</p><div class="tip"><strong>没动起来？</strong>检查同一条 X 位置轨道上是否有两个不同时间、不同数值的关键帧。也可以先把两个关键帧的值直接改成 <code>100</code> 和 <code>900</code>。</div></div></li>
+          </ol>
+          <a class="inline-action" href="./">现在去编辑器试一遍 →</a>
+        </section>
+
+        <section class="doc-section" id="parameters"><div class="section-heading"><span class="chapter">02 / 交互</span><h2>让观众自己调参数</h2><p>关键帧负责“随时间变化”；参数负责“由观众控制”。两者可以用在不同属性上。</p></div>
+          <div class="two-columns"><div class="info-card"><span class="card-symbol">＋</span><h3>添加参数</h3><p>右侧<strong>「场景参数」</strong>标题旁点 <strong>＋</strong>。第一个参数的 ID 是 <code>p1</code>，默认范围 <code>0–10</code>。展开「参数定义」可改名称、范围、默认值和单位。</p></div><div class="info-card"><span class="card-symbol">ƒ</span><h3>绑定对象</h3><p>选中圆形，在右侧<strong>「时间表达式」</strong>的 <code>Y =</code> 输入框填入 <code>100 + p1 * 40</code>，按 Enter。拖动右侧参数滑块，小球会随之上下移动。</p></div></div>
+          <div class="callout"><strong>表达式里能写什么？</strong><span><code>t</code> 表示播放秒数，<code>p1</code> 是参数 ID，<code>x</code> 用于函数曲线的横坐标。支持 <code>+ - * / ^</code>、括号、<code>sin</code>、<code>cos</code>、<code>sqrt</code> 等常用函数；不能输入任意 JavaScript。</span></div>
+        </section>
+
+        <section class="doc-section" id="templates"><div class="section-heading"><span class="chapter">03 / 现成内容</span><h2>先改模板，再做自己的作品</h2><p>编辑器左侧「快速开始」提供三个能直接播放、修改、导出的示例。切换模板会替换当前项目，请先保存自己的改动。</p></div>
+          <div class="template-cards"><article><span class="template-glyph teal">∿</span><h3>正弦函数</h3><p>播放时观察运动点与图像。在右侧调「振幅」和「频率」，看看曲线和读数如何同步变化。</p></article><article><span class="template-glyph blue">↗</span><h3>抛体运动</h3><p>拖动「初速度」等参数，观察轨迹、位置和速度。示例使用忽略空气阻力的理想模型。</p></article><article><span class="template-glyph amber">⌕</span><h3>二分查找</h3><p>用播放进度逐步查看比较位置、左右边界和最后找到的目标。</p></article></div>
+          <p class="note">要自己画函数图像：先在「对象图层」添加「坐标系」，再添加「函数曲线」。选中曲线后，在检查器的「函数 y = f(x)」里输入如 <code>sin(x)</code>。</p>
+        </section>
+
+        <section class="doc-section" id="export"><div class="section-heading"><span class="chapter">04 / 完成作品</span><h2>保存项目，或者导出画面</h2><p>“保存项目”和“导出”用途不同：前者用于下次继续编辑，后者用于课件、文章和视频。</p></div>
+          <div class="export-list"><div><strong>保存项目</strong><p>顶部点击「保存项目」，下载 <code>.cmanim</code> 文件。下次点「打开」选这个文件，继续修改对象、关键帧和参数。</p></div><div><strong>当前帧 PNG</strong><p>将进度拖到想要的时刻，右侧「导出作品」点「当前帧 PNG」。适合插入 PPT 或文章。</p></div><div><strong>视频 / 逐帧 ZIP</strong><p>在支持录制的浏览器中点「视频 WebM」或「视频 MP4」；按钮不可用时选「逐帧 ZIP」。首版没有音轨，逐帧 ZIP 最多 360 帧。</p></div></div>
+        </section>
+
+        <section class="doc-section" id="sdk"><div class="section-heading"><span class="chapter">05 / 编程式 SDK</span><h2>在网页里嵌入动画</h2><p>如果你会写前端代码，可以直接创建项目数据并挂载播放器。SDK 与编辑器使用同一格式；先在编辑器做作品，再用 SDK 加载也可以。</p></div>
+          <div class="code-head"><span>TypeScript · 最小示例</span><a href="./examples/sdk-demo.html">打开可运行示例 ↗</a></div>
+          <pre><code>import 'canvas-manim/style.css'
+import { createBlankProject, mountPlayer } from 'canvas-manim'
+
+const project = createBlankProject()
+const scene = project.scenes[0]
+scene.nodes.push({
+  id: 'ball', type: 'circle', name: '小球',
+  x: 100, y: 150, radius: 24, fill: '#5eead4',
+})
+scene.tracks.push({
+  nodeId: 'ball', property: 'x',
+  keyframes: [
+    { time: 0, value: 100 },
+    { time: 2, value: 600, easing: 'easeInOut' },
+  ],
+})
+
+const player = mountPlayer(document.querySelector('#stage')!, project)
+player.play()
+// 页面卸载时调用 player.destroy()</code></pre>
+          <p class="note">工程内开发可以参照 <code>examples/sdk-demo.html</code>；库构建产物在 <code>dist-lib/</code>。项目文件只保存数据，不保存任意 JavaScript 回调。</p>
+        </section>
+
+        <section class="doc-section" id="faq"><div class="section-heading"><span class="chapter">遇到问题？</span><h2>常见问题</h2></div><div class="faq"><details><summary>我点了播放，但画面没有变化？</summary><p>静态对象不会自动动。先选中对象，为同一个属性添加两个不同时间、不同值的关键帧；或设置包含 <code>t</code> 的时间表达式。打开现成模板可先看可播放的例子。</p></details><details><summary>为什么模板对象的 X 位置不能直接修改？</summary><p>模板中的运动点等对象由表达式或关键帧决定位置。点选对象后，右侧 X/Y 会显示当前值并标注控制来源；要改变运动方式，请修改下方「时间表达式」，或在时间线编辑关键帧。普通静态对象可直接修改 X/Y。</p></details><details><summary>公式或图片为什么没有出现？</summary><p>公式需要使用数学 TeX 写法，如 <code>x^2+y^2=r^2</code>；资源载入失败时先看底部状态栏的错误。图片建议通过「对象图层」添加图片并选择本地文件。</p></details><details><summary>为什么导不出 MP4？</summary><p>视频格式取决于浏览器的录制能力；编辑器会显示实际支持的格式。无法录制时，请使用「逐帧 ZIP」获取 PNG 序列。</p></details><details><summary>关闭网页后项目还在吗？</summary><p>当前版本不提供云端自动保存。请使用顶部「保存项目」下载 <code>.cmanim</code> 文件，下次通过「打开」导入。</p></details></div></section>
+
+        <footer class="guide-footer"><span>Canvas Manim · 本地创作，不需要登录</span><a href="./">返回编辑器 →</a></footer>
+      </main>
+    </div>
+  </body>
+</html>
