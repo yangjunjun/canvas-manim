@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { TabsContent, TabsList, TabsRoot, TabsTrigger } from 'reka-ui'
 import { Player } from './core/player.ts'
 import { evaluateScene, validateProject } from './core/engine.ts'
 import { hitTestScene, selectionBounds } from './core/hit-test.ts'
@@ -18,6 +19,7 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const imageInput = ref<HTMLInputElement | null>(null)
 const player = ref<Player | null>(null)
 const selectedId = ref<string | null>(null)
+const activeInspectorTab = ref<'project' | 'object'>('project')
 const selectedTrack = ref('x')
 const currentTime = ref(0)
 const playing = ref(false)
@@ -60,6 +62,8 @@ const selectionBox = computed(() => {
 const playLabel = computed(() => playing.value ? '暂停' : '播放')
 const supportVideo = supportedVideoType()
 const cloneCurrent = (): Project => JSON.parse(JSON.stringify(project.value)) as Project
+
+watch(selectedId, id => { if (id) activeInspectorTab.value = 'object' })
 
 function displayNodeName(node: SceneNode): string {
   if (node.type !== 'text' && node.type !== 'formula') return node.name
@@ -145,6 +149,7 @@ function newProject(key: string): void {
   undoStack.length = 0; redoStack.length = 0
   sceneId.value = project.value.scenes[0].id
   selectedId.value = null
+  activeInspectorTab.value = 'project'
   currentTime.value = 0
   paramValues.value = {}
   syncPlayer(false)
@@ -156,11 +161,13 @@ function addScene(): void {
   commit(draft => draft.scenes.push({ id, name: `场景 ${draft.scenes.length + 1}`, duration: 8, params: [], nodes: [], tracks: [] }))
   sceneId.value = id
   selectedId.value = null
+  activeInspectorTab.value = 'project'
   syncPlayer(false)
 }
 
 function chooseScene(id: string): void {
   sceneId.value = id; selectedId.value = null; currentTime.value = 0
+  activeInspectorTab.value = 'project'
   player.value?.setScene(id)
 }
 
@@ -316,6 +323,7 @@ async function openFile(event: Event): Promise<void> {
   try {
     const loaded = await projectFromBlob(file)
     project.value = loaded; sceneId.value = loaded.scenes[0].id; selectedId.value = null; currentTime.value = 0; paramValues.value = {}
+    activeInspectorTab.value = 'project'
     undoStack.length = 0; redoStack.length = 0; syncPlayer(false)
     message.value = `已打开「${loaded.name}」`
   } catch (error) { announce(error) }
@@ -488,8 +496,17 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', keyboard); player.
       </section>
 
       <aside v-show="!rightCollapsed" id="right-panel" class="right-panel">
-        <div class="panel-heading"><span>属性检查器</span><span class="eyebrow">INSPECTOR</span></div>
-        <details class="project-settings"><summary>项目与场景设置</summary><div class="settings-body"><label>项目名称<input :value="project.name" @change="editProjectName" /></label><label>场景名称<input :value="scene.name" @change="editScene('name', $event)" /></label><div class="field-row"><label>时长（秒）<input type="number" min="0.1" step="0.1" :value="scene.duration" @change="editScene('duration', $event)" /></label><label>背景色<input type="color" :value="project.canvas.background ?? '#0b1220'" @change="editCanvas('background', $event)" /></label></div><div class="field-row"><label>画布宽度<input type="number" min="1" max="4096" :value="project.canvas.width" @change="editCanvas('width', $event)" /></label><label>画布高度<input type="number" min="1" max="4096" :value="project.canvas.height" @change="editCanvas('height', $event)" /></label></div></div></details>
+        <div class="panel-heading"><span>设置</span><span class="eyebrow">INSPECTOR</span></div>
+        <TabsRoot v-model="activeInspectorTab" class="inspector-tabs">
+          <TabsList class="inspector-tabs-list" aria-label="右侧设置">
+            <TabsTrigger value="project" class="inspector-tabs-trigger">项目／场景</TabsTrigger>
+            <TabsTrigger value="object" class="inspector-tabs-trigger">对象属性</TabsTrigger>
+          </TabsList>
+          <TabsContent value="project" class="inspector-tab-content">
+            <section class="project-settings"><div class="section-title">项目与场景设置</div><div class="settings-body"><label>项目名称<input :value="project.name" @change="editProjectName" /></label><label>场景名称<input :value="scene.name" @change="editScene('name', $event)" /></label><div class="field-row"><label>时长（秒）<input type="number" min="0.1" step="0.1" :value="scene.duration" @change="editScene('duration', $event)" /></label><label>背景色<input type="color" :value="project.canvas.background ?? '#0b1220'" @change="editCanvas('background', $event)" /></label></div><div class="field-row"><label>画布宽度<input type="number" min="1" max="4096" :value="project.canvas.width" @change="editCanvas('width', $event)" /></label><label>画布高度<input type="number" min="1" max="4096" :value="project.canvas.height" @change="editCanvas('height', $event)" /></label></div></div></section>
+            <div class="params-panel"><div class="section-title"><span>场景参数</span><button title="新增参数" @click="addParameter">＋</button></div><div v-for="param in scene.params" :key="param.id" class="param-item"><div class="param-head"><strong>{{ param.label }}</strong><span>{{ (paramValues[param.id] ?? param.value).toFixed(2) }} {{ param.unit }}</span></div><input type="range" :min="param.min" :max="param.max" :step="param.step" :value="paramValues[param.id] ?? param.value" :aria-label="param.label" @input="changeParam(param.id, Number(($event.target as HTMLInputElement).value))" /><details><summary>参数定义</summary><label>名称<input :value="param.label" @change="editParam(param.id, 'label', ($event.target as HTMLInputElement).value)" /></label><div class="field-row"><label>默认值<input type="number" :value="param.value" @change="editParam(param.id, 'value', ($event.target as HTMLInputElement).value)" /></label><label>单位<input :value="param.unit" @change="editParam(param.id, 'unit', ($event.target as HTMLInputElement).value)" /></label></div><div class="field-row"><label>最小<input type="number" :value="param.min" @change="editParam(param.id, 'min', ($event.target as HTMLInputElement).value)" /></label><label>最大<input type="number" :value="param.max" @change="editParam(param.id, 'max', ($event.target as HTMLInputElement).value)" /></label></div><label>步长<input type="number" min="0.001" step="0.001" :value="param.step" @change="editParam(param.id, 'step', ($event.target as HTMLInputElement).value)" /></label></details></div><p v-if="!scene.params.length" class="empty-note">添加参数，让作品可交互。</p></div>
+          </TabsContent>
+          <TabsContent value="object" class="inspector-tab-content">
         <div v-if="selected" class="inspector"><div class="inspector-name"><span class="template-icon teal">◇</span><div><strong>{{ displayNodeName(selected) }}</strong><small>{{ nodeNames[selected.type] }}</small></div><button title="删除对象" @click="removeSelected">×</button></div>
           <label>名称<input :value="primaryName" :disabled="textDriven" @change="editPrimaryName" /><small v-if="selected.type === 'text' || selected.type === 'formula'" class="field-help">{{ textDriven ? '画布文字由表达式或关键帧生成，请修改驱动来源' : '文字对象的名称就是画布显示内容' }}</small></label>
           <label v-if="selected.type !== 'group'">所属分组<select :value="selected.parentId ?? ''" @change="editNodeString('parentId', $event)"><option value="">无</option><option v-for="group in scene.nodes.filter(node => node.type === 'group')" :key="group.id" :value="group.id">{{ group.name }}</option></select></label>
@@ -506,7 +523,8 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', keyboard); player.
           <label>时间表达式 <small>例如 sin(t) 或 speed*t</small><input :value="selected.bindings?.x ?? ''" placeholder="X =" @change="editBinding('x', $event)" /><input :value="selected.bindings?.y ?? ''" placeholder="Y =" @change="editBinding('y', $event)" /></label>
           <template v-if="selected.type === 'text'"><label>数值读数表达式<input :value="selected.valueExpression ?? ''" placeholder="例如 speed*t" @change="editNodeString('valueExpression', $event)" /></label><div class="field-row"><label>前缀<input :value="selected.prefix ?? ''" @change="editNodeString('prefix', $event)" /></label><label>后缀<input :value="selected.suffix ?? ''" @change="editNodeString('suffix', $event)" /></label></div><label>小数位<input type="number" min="0" max="8" :value="selected.precision ?? 2" @change="editNodeNumber('precision', $event)" /></label></template>
         </div><div v-else class="inspector-empty"><span>◇</span><p>选择画布上的对象或左侧图层，在这里调整属性。</p></div>
-        <div class="params-panel"><div class="section-title"><span>场景参数</span><button title="新增参数" @click="addParameter">＋</button></div><div v-for="param in scene.params" :key="param.id" class="param-item"><div class="param-head"><strong>{{ param.label }}</strong><span>{{ (paramValues[param.id] ?? param.value).toFixed(2) }} {{ param.unit }}</span></div><input type="range" :min="param.min" :max="param.max" :step="param.step" :value="paramValues[param.id] ?? param.value" :aria-label="param.label" @input="changeParam(param.id, Number(($event.target as HTMLInputElement).value))" /><details><summary>参数定义</summary><label>名称<input :value="param.label" @change="editParam(param.id, 'label', ($event.target as HTMLInputElement).value)" /></label><div class="field-row"><label>默认值<input type="number" :value="param.value" @change="editParam(param.id, 'value', ($event.target as HTMLInputElement).value)" /></label><label>单位<input :value="param.unit" @change="editParam(param.id, 'unit', ($event.target as HTMLInputElement).value)" /></label></div><div class="field-row"><label>最小<input type="number" :value="param.min" @change="editParam(param.id, 'min', ($event.target as HTMLInputElement).value)" /></label><label>最大<input type="number" :value="param.max" @change="editParam(param.id, 'max', ($event.target as HTMLInputElement).value)" /></label></div><label>步长<input type="number" min="0.001" step="0.001" :value="param.step" @change="editParam(param.id, 'step', ($event.target as HTMLInputElement).value)" /></label></details></div><p v-if="!scene.params.length" class="empty-note">添加参数，让作品可交互。</p></div>
+          </TabsContent>
+        </TabsRoot>
       </aside>
     </main>
     <footer class="statusbar"><span class="status-dot"></span><span>{{ message }}</span><span class="status-right">{{ busy ? '正在处理…' : '本地运行 · 无需登录' }}</span></footer>

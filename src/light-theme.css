@@ -85,6 +85,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .keyframe span, .keyframe input { color: var(--foreground); }
 
 .right-panel .panel-heading { border-bottom-color: var(--sidebar-border); }
+.inspector-tabs-list { position: sticky; top: 0; z-index: 2; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 0 12px; border-bottom: 1px solid var(--sidebar-border); background: var(--sidebar); }
+.inspector-tabs-trigger { min-height: 43px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted-foreground); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.inspector-tabs-trigger:hover { color: var(--foreground); }
+.inspector-tabs-trigger[data-state="active"] { border-bottom-color: var(--primary); color: var(--foreground); }
+.inspector-tab-content { min-width: 0; }
 .inspector-name strong { color: var(--foreground); }
 .inspector-name small, .field-help { color: var(--muted-foreground); }
 .inspector-name button { color: var(--muted-foreground); background: var(--secondary); }
@@ -97,8 +102,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .inspector-empty { color: var(--muted-foreground); }
 .inspector-empty span { color: var(--border); }
 .project-settings { color: var(--muted-foreground); border-bottom-color: var(--border); }
-.project-settings summary { background: var(--sidebar); color: var(--foreground); }
-.project-settings summary:hover { background: var(--sidebar-accent); }
 .params-panel { border-top-color: var(--sidebar-border); }
 .param-item { border-bottom-color: var(--sidebar-border); }
 .param-head { color: var(--foreground); }
