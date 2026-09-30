@@ -19,6 +19,8 @@ const selectedTrack = ref('x')
 const currentTime = ref(0)
 const playing = ref(false)
 const busy = ref(false)
+const leftCollapsed = ref(typeof window !== 'undefined' && window.innerWidth < 900)
+const rightCollapsed = ref(typeof window !== 'undefined' && window.innerWidth < 900)
 const message = ref('选择模板或从空白场景开始。')
 const paramValues = ref<Record<string, number>>({})
 const undoStack: Project[] = []
@@ -81,6 +83,18 @@ function driverFor(property: 'x' | 'y'): '表达式' | '关键帧' | null {
 }
 
 function announce(error: unknown): void { message.value = error instanceof Error ? error.message : String(error) }
+
+function togglePanel(side: 'left' | 'right'): void {
+  if (side === 'left') {
+    leftCollapsed.value = !leftCollapsed.value
+    if (!leftCollapsed.value && window.innerWidth < 900) rightCollapsed.value = true
+  } else {
+    rightCollapsed.value = !rightCollapsed.value
+    if (!rightCollapsed.value && window.innerWidth < 900) leftCollapsed.value = true
+  }
+}
+
+function closePanels(): void { leftCollapsed.value = true; rightCollapsed.value = true }
 
 function syncPlayer(keepTime = true): void {
   const time = keepTime ? currentTime.value : 0
@@ -404,7 +418,13 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', keyboard); player.
 <template>
   <div class="workspace">
     <header class="topbar">
-      <div class="brand"><span class="brand-mark">◈</span><div><strong>Canvas Manim</strong><small>数学与科学动画工作台</small></div></div>
+      <div class="top-left">
+        <div class="brand"><span class="brand-mark">◈</span><div><strong>Canvas Manim</strong><small>数学与科学动画工作台</small></div></div>
+        <div class="panel-switches" aria-label="工作区面板">
+          <button class="panel-toggle" :class="{ active: !leftCollapsed }" :aria-expanded="!leftCollapsed" aria-controls="left-panel" :aria-label="leftCollapsed ? '展开左侧栏' : '折叠左侧栏'" @click="togglePanel('left')"><span aria-hidden="true">▤</span><span>图层</span></button>
+          <button class="panel-toggle" :class="{ active: !rightCollapsed }" :aria-expanded="!rightCollapsed" aria-controls="right-panel" :aria-label="rightCollapsed ? '展开右侧栏' : '折叠右侧栏'" @click="togglePanel('right')"><span aria-hidden="true">▥</span><span>属性</span></button>
+        </div>
+      </div>
       <div class="top-actions">
         <span class="project-name">{{ project.name }}</span>
         <a class="ghost help-link" href="./guide.html" target="_blank" rel="noopener noreferrer">？ 使用指南</a>
@@ -418,8 +438,9 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', keyboard); player.
       </div>
     </header>
 
-    <main class="main-layout">
-      <aside class="left-panel">
+    <main class="main-layout" :class="{ 'left-collapsed': leftCollapsed, 'right-collapsed': rightCollapsed }">
+      <button v-if="!leftCollapsed || !rightCollapsed" class="panel-scrim" aria-label="关闭侧栏" @click="closePanels"></button>
+      <aside v-show="!leftCollapsed" id="left-panel" class="left-panel">
         <div class="panel-heading"><span>快速开始</span><span class="eyebrow">TEMPLATES</span></div>
         <a class="starter-link" href="./guide.html" target="_blank" rel="noopener noreferrer"><span>第一次使用？</span><strong>跟着指南完成第一个动画 →</strong></a>
         <div class="template-list">
@@ -450,7 +471,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', keyboard); player.
         </div>
       </section>
 
-      <aside class="right-panel">
+      <aside v-show="!rightCollapsed" id="right-panel" class="right-panel">
         <div class="panel-heading"><span>属性检查器</span><span class="eyebrow">INSPECTOR</span></div>
         <details class="project-settings"><summary>项目与场景设置</summary><div class="settings-body"><label>项目名称<input :value="project.name" @change="editProjectName" /></label><label>场景名称<input :value="scene.name" @change="editScene('name', $event)" /></label><div class="field-row"><label>时长（秒）<input type="number" min="0.1" step="0.1" :value="scene.duration" @change="editScene('duration', $event)" /></label><label>背景色<input type="color" :value="project.canvas.background ?? '#0b1220'" @change="editCanvas('background', $event)" /></label></div><div class="field-row"><label>画布宽度<input type="number" min="1" max="4096" :value="project.canvas.width" @change="editCanvas('width', $event)" /></label><label>画布高度<input type="number" min="1" max="4096" :value="project.canvas.height" @change="editCanvas('height', $event)" /></label></div></div></details>
         <div v-if="selected" class="inspector"><div class="inspector-name"><span class="template-icon teal">◇</span><div><strong>{{ displayNodeName(selected) }}</strong><small>{{ nodeNames[selected.type] }}</small></div><button title="删除对象" @click="removeSelected">×</button></div>

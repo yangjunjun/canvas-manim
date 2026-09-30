@@ -5,10 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Canvas Manim SDK 示例</title>
     <style>
-      body{margin:0;background:#0b101a;color:#e5eef8;font-family:system-ui,sans-serif;padding:32px}
-      main{max-width:1100px;margin:auto}h1{font-size:24px}canvas{display:block;width:100%;border:1px solid #334155;border-radius:12px}
-      .controls{display:flex;align-items:center;gap:16px;margin-top:20px}button{padding:9px 16px;background:#5eead4;border:0;border-radius:8px;color:#082422;cursor:pointer}
-      input[type=range]{flex:1;accent-color:#5eead4}a{color:#5eead4}
+      *{box-sizing:border-box}body{margin:0;background:#f6f8fa;color:#24292f;font-family:system-ui,sans-serif;padding:32px}
+      main{max-width:1100px;margin:auto}h1{font-size:28px;letter-spacing:-.03em;margin-bottom:6px}p{color:#57606a;line-height:1.7}canvas{display:block;width:100%;border:1px solid #d0d7de;border-radius:10px;box-shadow:0 8px 24px #1f23281a}
+      .controls{display:flex;align-items:center;gap:16px;margin-top:20px;padding:18px;border:1px solid #d8dee4;border-radius:10px;background:#fff}button{padding:9px 16px;background:#171717;border:0;border-radius:7px;color:#fff;cursor:pointer}
+      button:hover{background:#404040}input[type=range]{flex:1;accent-color:#0969da}a{color:#0969da;text-decoration:none}a:hover{text-decoration:underline}
+      @media(max-width:700px){body{padding:16px}.controls{flex-wrap:wrap}.controls input[type=range]{min-width:100%}}
     </style>
   </head>
   <body>
