@@ -28,10 +28,29 @@ const exportOpen = ref(false)
 const leftCollapsed = ref(typeof window !== 'undefined' && window.innerWidth < 900)
 const rightCollapsed = ref(typeof window !== 'undefined' && window.innerWidth < 900)
 const message = ref('选择模板或从空白场景开始。')
+const canvasPresets: { group: string; sizes: { label: string; width: number; height: number }[] }[] = [
+  { group: '手机视频', sizes: [
+    { label: '竖屏 HD', width: 720, height: 1280 },
+    { label: '竖屏 Full HD', width: 1080, height: 1920 },
+    { label: '全面屏', width: 1080, height: 2340 },
+  ] },
+  { group: '平板视频', sizes: [
+    { label: '横屏 16:10', width: 1920, height: 1200 },
+    { label: '横屏 4:3', width: 2048, height: 1536 },
+  ] },
+  { group: 'PC 视频', sizes: [
+    { label: 'HD 720p', width: 1280, height: 720 },
+    { label: 'Full HD 1080p', width: 1920, height: 1080 },
+    { label: '2K 1440p', width: 2560, height: 1440 },
+    { label: '4K UHD', width: 3840, height: 2160 },
+  ] },
+]
 const paramValues = ref<Record<string, number>>({})
 const undoStack: Project[] = []
 const redoStack: Project[] = []
 const scene = computed(() => project.value.scenes.find(item => item.id === sceneId.value) ?? project.value.scenes[0])
+const selectedCanvasPreset = computed(() => canvasPresets.flatMap(group => group.sizes)
+  .find(size => size.width === project.value.canvas.width && size.height === project.value.canvas.height))
 const selected = computed(() => scene.value.nodes.find(node => node.id === selectedId.value) ?? null)
 const evaluatedSelected = computed(() => {
   if (!selectedId.value) return null
@@ -224,6 +243,11 @@ function editProjectName(event: Event): void { commit(draft => { draft.name = (e
 function editCanvas(field: 'width' | 'height' | 'background', event: Event): void {
   const value = (event.target as HTMLInputElement).value
   commit(draft => { if (field === 'background') draft.canvas.background = value; else draft.canvas[field] = Number(value) })
+}
+function applyCanvasPreset(event: Event): void {
+  const value = (event.target as HTMLSelectElement).value
+  const preset = canvasPresets.flatMap(group => group.sizes).find(size => `${size.width}x${size.height}` === value)
+  if (preset) commit(draft => { draft.canvas.width = preset.width; draft.canvas.height = preset.height })
 }
 function editScene(field: 'name' | 'duration', event: Event): void {
   const value = (event.target as HTMLInputElement).value
@@ -483,7 +507,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', keyboard); player.
 
       <section class="stage-section">
         <div class="stage-header"><div><span class="eyebrow">SCENE PREVIEW</span><h1>{{ scene.name }}</h1></div><div class="stage-meta">{{ project.canvas.width }} × {{ project.canvas.height }} <span>·</span> {{ scene.duration }}s</div></div>
-        <div class="canvas-shell">
+        <div class="canvas-shell" :style="{ aspectRatio: `${project.canvas.width} / ${project.canvas.height}`, maxWidth: `min(1120px, ${70 * project.canvas.width / project.canvas.height}vh)` }">
           <canvas ref="canvas" :width="project.canvas.width" :height="project.canvas.height" @pointerdown="canvasPointerDown" @pointermove="canvasPointerMove" @pointerup="canvasPointerUp" @pointercancel="canvasPointerUp"></canvas>
           <svg v-if="selectionBox" class="selection-overlay" :viewBox="`0 0 ${project.canvas.width} ${project.canvas.height}`" preserveAspectRatio="none" aria-hidden="true"><rect class="selection-rect" :x="selectionBox.x" :y="selectionBox.y" :width="selectionBox.width" :height="selectionBox.height" /><circle v-for="(corner, index) in [[selectionBox.x, selectionBox.y], [selectionBox.x + selectionBox.width, selectionBox.y], [selectionBox.x, selectionBox.y + selectionBox.height], [selectionBox.x + selectionBox.width, selectionBox.y + selectionBox.height]]" :key="index" class="selection-handle" :cx="corner[0]" :cy="corner[1]" r="4" /></svg>
           <span class="canvas-badge">{{ selected ? `已选中 · ${displayNodeName(selected)}` : '点击画布或图层选择对象' }}</span>
@@ -503,7 +527,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', keyboard); player.
             <TabsTrigger value="object" class="inspector-tabs-trigger">对象属性</TabsTrigger>
           </TabsList>
           <TabsContent value="project" class="inspector-tab-content">
-            <section class="project-settings"><div class="section-title">项目与场景设置</div><div class="settings-body"><label>项目名称<input :value="project.name" @change="editProjectName" /></label><label>场景名称<input :value="scene.name" @change="editScene('name', $event)" /></label><div class="field-row"><label>时长（秒）<input type="number" min="0.1" step="0.1" :value="scene.duration" @change="editScene('duration', $event)" /></label><label>背景色<input type="color" :value="project.canvas.background ?? '#0b1220'" @change="editCanvas('background', $event)" /></label></div><div class="field-row"><label>画布宽度<input type="number" min="1" max="4096" :value="project.canvas.width" @change="editCanvas('width', $event)" /></label><label>画布高度<input type="number" min="1" max="4096" :value="project.canvas.height" @change="editCanvas('height', $event)" /></label></div></div></section>
+            <section class="project-settings"><div class="section-title">项目与场景设置</div><div class="settings-body"><label>项目名称<input :value="project.name" @change="editProjectName" /></label><label>场景名称<input :value="scene.name" @change="editScene('name', $event)" /></label><div class="field-row"><label>时长（秒）<input type="number" min="0.1" step="0.1" :value="scene.duration" @change="editScene('duration', $event)" /></label><label>背景色<input type="color" :value="project.canvas.background ?? '#0b1220'" @change="editCanvas('background', $event)" /></label></div><label>画布预置<select :value="selectedCanvasPreset ? `${selectedCanvasPreset.width}x${selectedCanvasPreset.height}` : ''" @change="applyCanvasPreset"><option value="" disabled>自定义尺寸</option><optgroup v-for="group in canvasPresets" :key="group.group" :label="group.group"><option v-for="size in group.sizes" :key="`${size.width}x${size.height}`" :value="`${size.width}x${size.height}`">{{ size.label }} · {{ size.width }} × {{ size.height }}</option></optgroup></select></label><div class="field-row"><label>画布宽度<input type="number" min="1" max="4096" :value="project.canvas.width" @change="editCanvas('width', $event)" /></label><label>画布高度<input type="number" min="1" max="4096" :value="project.canvas.height" @change="editCanvas('height', $event)" /></label></div></div></section>
             <div class="params-panel"><div class="section-title"><span>场景参数</span><button title="新增参数" @click="addParameter">＋</button></div><div v-for="param in scene.params" :key="param.id" class="param-item"><div class="param-head"><strong>{{ param.label }}</strong><span>{{ (paramValues[param.id] ?? param.value).toFixed(2) }} {{ param.unit }}</span></div><input type="range" :min="param.min" :max="param.max" :step="param.step" :value="paramValues[param.id] ?? param.value" :aria-label="param.label" @input="changeParam(param.id, Number(($event.target as HTMLInputElement).value))" /><details><summary>参数定义</summary><label>名称<input :value="param.label" @change="editParam(param.id, 'label', ($event.target as HTMLInputElement).value)" /></label><div class="field-row"><label>默认值<input type="number" :value="param.value" @change="editParam(param.id, 'value', ($event.target as HTMLInputElement).value)" /></label><label>单位<input :value="param.unit" @change="editParam(param.id, 'unit', ($event.target as HTMLInputElement).value)" /></label></div><div class="field-row"><label>最小<input type="number" :value="param.min" @change="editParam(param.id, 'min', ($event.target as HTMLInputElement).value)" /></label><label>最大<input type="number" :value="param.max" @change="editParam(param.id, 'max', ($event.target as HTMLInputElement).value)" /></label></div><label>步长<input type="number" min="0.001" step="0.001" :value="param.step" @change="editParam(param.id, 'step', ($event.target as HTMLInputElement).value)" /></label></details></div><p v-if="!scene.params.length" class="empty-note">添加参数，让作品可交互。</p></div>
           </TabsContent>
           <TabsContent value="object" class="inspector-tab-content">

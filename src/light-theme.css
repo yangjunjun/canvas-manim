@@ -95,7 +95,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .inspector-name button { color: var(--muted-foreground); background: var(--secondary); }
 .inspector-name button:hover { background: var(--destructive); color: var(--primary-foreground); }
 .inspector label, .param-item label, .settings-body label { color: var(--muted-foreground); }
-.inspector input, .param-item input:not([type=range]), .settings-body input, .inspector select { color: var(--foreground); background: var(--background); border-color: var(--input); border-radius: var(--radius-md); }
+.inspector input, .param-item input:not([type=range]), .settings-body input, .settings-body select, .inspector select { color: var(--foreground); background: var(--background); border-color: var(--input); border-radius: var(--radius-md); }
 .inspector input:focus, .param-item input:focus { outline-color: var(--ring); }
 .inspector input:disabled { background: var(--secondary); color: var(--muted-foreground); }
 .driven-note { color: #9a6700; }
