@@ -2,6 +2,10 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { evaluateExpression } from '../src/core/expression.ts'
 import { evaluateScene, validateProject } from '../src/core/engine.ts'
+import { transformedNodes } from '../src/core/renderer.ts'
+import { hitTestScene, selectionBounds } from '../src/core/hit-test.ts'
+import { removeNodeFromScene } from '../src/core/scene-mutations.ts'
+import { samplePlot } from '../src/core/plot.ts'
 import { applyAnimationCombo } from '../src/core/animation-combos.ts'
 import { resolveExportRange } from '../src/core/export.ts'
 import { projectFromBlob, projectToBlob } from '../src/core/project-file.ts'
@@ -13,6 +17,20 @@ test('表达式支持受限数学运算并拒绝任意代码', () => {
   assert.equal(evaluateExpression('-2^2', {}), -4)
   assert.throws(() => evaluateExpression('window.alert(1)', {}))
   assert.throws(() => evaluateExpression('unknown+1', {}), /未知变量/)
+})
+
+test('函数采样在阶跃、极点和定义域空洞处断线，连续曲线保持连通', () => {
+  const linear = samplePlot('x*x', {}, 0, [-2, 2], [-5, 5], 400, 400)
+  assert.equal(linear.segments.length, 1)
+  const steps = samplePlot('floor(x)', {}, 0, [-2, 2], [-5, 5], 401, 400)
+  assert.ok(steps.segments.length >= 3)
+  assert.ok(steps.segments.every(segment => segment.every(([x, y]) => y === Math.floor(x))))
+  const pole = samplePlot('1/(x-0.13)', {}, 0, [-1, 1], [-5, 5], 400, 400)
+  assert.ok(pole.segments.length >= 2)
+  const domain = samplePlot('sqrt(x)', {}, 0, [-1, 1], [-5, 5], 400, 400)
+  assert.equal(domain.segments.length, 1)
+  assert.ok(domain.segments[0][0][0] >= 0)
+  assert.match(samplePlot('missing*x', {}, 0, [-1, 1], [-5, 5], 100, 400).error?.message ?? '', /未知变量/)
 })
 
 test('导出时间段校验与可见性轨道求值', () => {
@@ -194,6 +212,60 @@ test('动画组合可复用于不同对象，参数独立且不覆盖已有轨�
   assert.throws(() => applyAnimationCombo(scene, 'b', { kind: 'pulse', start: 7, duration: 2, amount: 1.2 }), /参数无效/)
 })
 
+test('分组显隐与透明度作用到所有子对象和选区', () => {
+  const project = createBlankProject(), scene = project.scenes[0]
+  scene.nodes.push(
+    { id: 'group', type: 'group', name: '分组', x: 100, y: 100, opacity: 0.5, visible: true },
+    { id: 'nested', type: 'group', name: '内层分组', x: 30, y: 0, parentId: 'group', opacity: 0.4 },
+    { id: 'dot', type: 'circle', name: '子对象', x: 20, y: 0, parentId: 'nested', radius: 12, opacity: 0.5,
+      trail: { duration: 1, samples: 2, radius: 4, opacity: 0.5 } },
+  )
+  validateProject(project)
+  const state = evaluateScene(scene, 0)
+  const dot = transformedNodes(state.nodes).find(node => node.id === 'dot')!
+  assert.deepEqual([dot.x, dot.y, dot.opacity, dot.visible], [150, 100, 0.1, true])
+  assert.equal(hitTestScene(state, 150, 100)?.id, 'dot')
+  scene.nodes[0].visible = false
+  const hidden = evaluateScene(scene, 0)
+  assert.equal(transformedNodes(hidden.nodes).find(node => node.id === 'dot')?.visible, false)
+  assert.equal(hitTestScene(hidden, 150, 100), null)
+  assert.equal(selectionBounds(hidden, 'dot'), null)
+  assert.deepEqual(hidden.trails, [])
+  scene.nodes[0].visible = true
+  scene.nodes[0].opacity = 0
+  assert.equal(transformedNodes(evaluateScene(scene, 0).nodes).find(node => node.id === 'dot')?.opacity, 0)
+})
+
+test('删除分组会移除子树和依赖坐标系的曲线，保留对象不会悬空引用', () => {
+  const project = createBlankProject(), scene = project.scenes[0]
+  scene.nodes.push(
+    { id: 'group', type: 'group', name: '分组', x: 0, y: 0 },
+    { id: 'route', type: 'path', name: '子路径', x: 0, y: 0, parentId: 'group', points: [[0, 0], [20, 0]] },
+    { id: 'axes', type: 'axes', name: '子坐标系', x: 0, y: 0, parentId: 'group', width: 100, height: 100 },
+    { id: 'curve', type: 'plot', name: '曲线', x: 0, y: 0, axesId: 'axes', expression: 'x' },
+    { id: 'dot', type: 'point', name: '运动点', x: 0, y: 0, radius: 5, axesId: 'axes' },
+    { id: 'follower', type: 'circle', name: '跟随者', x: 0, y: 0, radius: 5,
+      followPath: { pathId: 'route', progress: 0.5, offsetX: 0, offsetY: 0 } },
+  )
+  scene.tracks.push({ nodeId: 'route', property: 'opacity', keyframes: [{ time: 0, value: 1 }] })
+  validateProject(project)
+  removeNodeFromScene(scene, 'group')
+  validateProject(project)
+  assert.deepEqual(scene.nodes.map(node => node.id), ['dot', 'follower'])
+  assert.equal(scene.nodes[0].axesId, undefined)
+  assert.equal(scene.nodes[1].followPath, undefined)
+  assert.deepEqual(scene.tracks, [])
+  scene.nodes.push(
+    { id: 'source', type: 'circle', name: '起始', x: 0, y: 0, radius: 5,
+      matchTransform: { targetId: 'destination', start: 0, end: 1, easing: 'linear' } },
+    { id: 'destination', type: 'circle', name: '目标', x: 10, y: 10, radius: 10 },
+  )
+  validateProject(project)
+  removeNodeFromScene(scene, 'destination')
+  validateProject(project)
+  assert.equal(scene.nodes.find(node => node.id === 'source')?.matchTransform, undefined)
+})
+
 test('代码创建的分组、路径、图片、参数、时间线和扩展数据可在项目文件往返', async () => {
   const project = createBlankProject()
   project.assets.push({ id: 'pixel', name: '像素', mime: 'image/png', data: 'AQID' })
@@ -258,10 +330,16 @@ test('六个内置项目均可校验、求值与保存', async () => {
   for (const [key, create] of Object.entries(templates)) {
     const project = create()
     assert.equal(validateProject(project), project, key)
-    for (const time of [0, project.scenes[0].duration / 2, project.scenes[0].duration]) {
-      assert.ok(evaluateScene(project.scenes[0], time).nodes.length > 0, `${key} at ${time}s`)
+    const loaded = await projectFromBlob(projectToBlob(project))
+    assert.deepEqual(loaded, project, key)
+    for (const time of [0, project.scenes[0].duration / 2, project.scenes[0].duration]) for (const edge of ['min', 'value', 'max'] as const) {
+      const params = Object.fromEntries(project.scenes[0].params.map(param => [param.id, param[edge]]))
+      const before = evaluateScene(project.scenes[0], time, params, { canvas: project.canvas })
+      const after = evaluateScene(loaded.scenes[0], time, params, { canvas: loaded.canvas })
+      assert.ok(before.nodes.length > 0, `${key} at ${time}s`)
+      assert.deepEqual(after.nodes, before.nodes, `${key} at ${time}s with ${edge} parameters`)
+      assert.deepEqual(after.trails, before.trails, `${key} trails at ${time}s`)
     }
-    assert.deepEqual(await projectFromBlob(projectToBlob(project)), project, key)
   }
 })
 

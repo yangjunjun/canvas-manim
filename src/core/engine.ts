@@ -258,9 +258,12 @@ export function evaluateScene(scene: Scene, time: number, inputParams: Record<st
   }
   const trails: EvaluatedScene['trails'] = []
   const history = new Map<number, SceneNode[]>()
+  const currentWorld = includeTrails && nodes.some(node => node.trail) ? new Map(transformedNodes(nodes).map(node => [node.id, node])) : null
   if (includeTrails) for (const node of nodes) {
     const trail = node.trail
     if (!trail) continue
+    const current = currentWorld?.get(node.id)
+    if (current?.visible === false || (current?.opacity ?? 1) <= 0) continue
     const points: NonNullable<EvaluatedScene['trails']>[number]['points'] = []
     for (let index = trail.samples; index >= 1; index--) {
       const sampleTime = t - trail.duration * index / trail.samples
@@ -273,6 +276,7 @@ export function evaluateScene(scene: Scene, time: number, inputParams: Record<st
           history.set(sampleTime, world)
         }
         const previous = world.find(item => item.id === node.id)!
+        if (previous.visible === false || (previous.opacity ?? 1) <= 0) continue
         const axes = previous.axesId ? world.find(item => item.id === previous.axesId) : undefined
         const [x, y] = axes ? axesPoint(axes, previous.x, previous.y) : [previous.x, previous.y]
         points.push({ x, y, opacity: trail.opacity * (1 - index / (trail.samples + 1)) * (previous.opacity ?? 1) })

@@ -3,7 +3,7 @@ import { TeX } from 'mathjax-full/js/input/tex.js'
 import { SVG } from 'mathjax-full/js/output/svg.js'
 import { liteAdaptor } from 'mathjax-full/js/adaptors/liteAdaptor.js'
 import { RegisterHTMLHandler } from 'mathjax-full/js/handlers/html.js'
-import { evaluateExpression } from './expression.ts'
+import { samplePlot } from './plot.ts'
 import type { EvaluatedScene, Project, SceneNode } from './types.ts'
 
 const adaptor = liteAdaptor()
@@ -107,6 +107,8 @@ export function transformedNodes(input: SceneNode[]): SceneNode[] {
         if (node.x2 !== undefined && node.y2 !== undefined) [output.x2, output.y2] = point(node.x2, node.y2)
         output.rotation = (node.rotation ?? 0) + angle
         output.scale = (node.scale ?? 1) * scale
+        output.opacity = (node.opacity ?? 1) * (frame.opacity ?? 1)
+        output.visible = node.visible !== false && frame.visible !== false
       }
     }
     if (node.type === 'axes' || node.type === 'image') {
@@ -190,28 +192,21 @@ export function renderScene(canvas: HTMLCanvasElement, project: Project, state: 
       }
     } else if (node.type === 'plot' && axes && node.expression) {
       const [xmin, xmax] = axes.xRange ?? [-5, 5]
-      const [ymin, ymax] = axes.yRange ?? [-3, 3]
       const count = Math.min(1200, Math.max(80, Math.round((axes.width ?? 800) / 3)))
       ctx.save()
       ctx.beginPath()
       ctx.rect(axes.x, axes.y, axes.width ?? 1, axes.height ?? 1)
       ctx.clip()
       ctx.beginPath()
-      let active = false, previousY = 0, expressionError: Error | undefined
-      for (let i = 0; i <= count; i++) {
-        const xv = xmin + (xmax - xmin) * i / count
-        let yv: number
-        try { yv = evaluateExpression(node.expression, { ...state.params, t: state.time, x: xv }) }
-        catch (cause) { yv = NaN; expressionError ??= cause instanceof Error ? cause : new Error(String(cause)) }
-        if (!Number.isFinite(yv) || Math.abs(yv) > 1e6 || (active && Math.abs(yv - previousY) > (ymax - ymin) * 1.2)) { active = false; continue }
+      const sampled = samplePlot(node.expression, state.params, state.time, [xmin, xmax], axes.yRange ?? [-3, 3], count, axes.height ?? 1)
+      for (const segment of sampled.segments) segment.forEach(([xv, yv], index) => {
         const [px, py] = axesPoint(axes, xv, yv)
-        if (!active) ctx.moveTo(px, py)
+        if (!index) ctx.moveTo(px, py)
         else ctx.lineTo(px, py)
-        active = true; previousY = yv
-      }
+      })
       ctx.stroke()
       ctx.restore()
-      if (expressionError) throw new Error(`函数表达式：${expressionError.message}`)
+      if (sampled.error) throw new Error(`函数表达式：${sampled.error.message}`)
     } else if (node.type === 'circle' || node.type === 'point') {
       ctx.beginPath(); ctx.arc(x, y, (node.radius ?? 18) * (node.scale ?? 1), 0, Math.PI * 2); ctx.fill()
       if (node.stroke) ctx.stroke()
