@@ -36,20 +36,20 @@
 
         <section class="doc-section" id="first-animation"><div class="section-heading"><span class="chapter">01 / 可视化编辑器</span><h2>做一个会移动的小球</h2><p>这个练习只用编辑器操作：创建圆形 → 设置两个位置 → 播放。完成后你就理解了场景、对象和时间线的关系。</p></div>
           <ol class="steps">
-            <li><span class="step-index">01</span><div><h3>打开空白项目</h3><p>点击顶部的<strong>「新建」</strong>。左侧是对象图层，中间是画布和时间线，右侧有「项目／场景」与「对象属性」两个标签页。此时画布为空是正常的。</p></div></li>
-            <li><span class="step-index">02</span><div><h3>添加圆形</h3><p>在左侧<strong>「对象图层」→「＋ 添加」</strong>选择<strong>「圆形」</strong>。新圆形会被选中，右侧自动切到「对象属性」；你可以拖动画布上的圆，或修改 X、Y 位置和颜色。</p></div></li>
-            <li><span class="step-index">03</span><div><h3>放置起点关键帧</h3><p>保持圆形选中。在中间时间线把动画属性选为<strong>「X 位置」</strong>，播放进度拖到 <code>0.00 s</code>，点击<strong>「＋ 关键帧」</strong>。时间线上会出现一枚菱形。</p></div></li>
-            <li><span class="step-index">04</span><div><h3>放置终点关键帧</h3><p>把进度拖到 <code>2.00 s</code>，再点一次<strong>「＋ 关键帧」</strong>。在新关键帧右侧的数值框输入 <code>900</code> 并按 Enter。现在点击画布下方的<strong>播放按钮「▶」</strong>，小球会向右移动。</p><div class="tip"><strong>没动起来？</strong>检查同一条 X 位置轨道上是否有两个不同时间、不同数值的关键帧。也可以先把两个关键帧的值直接改成 <code>100</code> 和 <code>900</code>。</div></div></li>
+            <li><span class="step-index">01</span><div><h3>打开空白项目</h3><p>点击顶部的<strong>「新建」</strong>。两侧竖排图标分别打开模板、场景、图层和项目、属性、参数面板；中间是画布和时间线。此时画布为空是正常的。</p></div></li>
+            <li><span class="step-index">02</span><div><h3>添加圆形</h3><p>点击左侧<strong>「图层」</strong>图标，在展开的面板里通过<strong>「＋ 添加」</strong>选择<strong>「圆形」</strong>。新圆形会被选中，右侧自动打开「属性」面板；你可以拖动画布上的圆，或修改 X、Y 位置和颜色。</p></div></li>
+            <li><span class="step-index">03</span><div><h3>放置起点关键帧</h3><p>保持圆形选中。在中间时间线把动画属性选为<strong>「X 位置」</strong>，点击时间刻度的 <code>0.00 s</code> 位置，再点<strong>「＋ 关键帧」</strong>。时间线上会出现一枚菱形。</p></div></li>
+            <li><span class="step-index">04</span><div><h3>放置终点关键帧</h3><p>点击时间刻度的 <code>2.00 s</code> 位置，再点一次<strong>「＋ 关键帧」</strong>。选中新菱形，在时间线下方的<strong>「值」</strong>输入框填入 <code>900</code> 并按 Enter。现在点击画布下方的<strong>播放按钮「▶」</strong>，小球会向右移动。</p><div class="tip"><strong>没动起来？</strong>检查同一条 X 位置轨道上是否有两个不同时间、不同数值的关键帧。拖动菱形可调整时间，选中后也可修改数值或删除关键帧。</div></div></li>
           </ol>
           <a class="inline-action" href="./">现在去编辑器试一遍 →</a>
         </section>
 
         <section class="doc-section" id="parameters"><div class="section-heading"><span class="chapter">02 / 交互</span><h2>让观众自己调参数</h2><p>关键帧负责“随时间变化”；参数负责“由观众控制”。两者可以用在不同属性上。</p></div>
-          <div class="two-columns"><div class="info-card"><span class="card-symbol">＋</span><h3>添加参数</h3><p>切到右侧<strong>「项目／场景」</strong>页，在「场景参数」标题旁点 <strong>＋</strong>。第一个参数的 ID 是 <code>p1</code>，默认范围 <code>0–10</code>。展开「参数定义」可改名称、范围、默认值和单位。</p></div><div class="info-card"><span class="card-symbol">ƒ</span><h3>绑定对象</h3><p>选中圆形，右侧会切到<strong>「对象属性」</strong>页。在「时间表达式」的 <code>Y =</code> 输入框填入 <code>100 + p1 * 40</code>，按 Enter。再切回「项目／场景」页拖动参数滑块，小球会随之上下移动。</p></div></div>
+          <div class="two-columns"><div class="info-card"><span class="card-symbol">＋</span><h3>添加参数</h3><p>点击右侧<strong>「参数」</strong>图标，在「场景参数」标题旁点 <strong>＋</strong>。第一个参数的 ID 是 <code>p1</code>，默认范围 <code>0–10</code>。展开「参数定义」可改名称、范围、默认值和单位。</p></div><div class="info-card"><span class="card-symbol">ƒ</span><h3>绑定对象</h3><p>选中圆形，右侧会打开<strong>「属性」</strong>面板。在「时间表达式」的 <code>Y =</code> 输入框填入 <code>100 + p1 * 40</code>，按 Enter。再点击右侧「参数」图标拖动参数滑块，小球会随之上下移动。</p></div></div>
           <div class="callout"><strong>表达式里能写什么？</strong><span><code>t</code> 表示播放秒数，<code>p1</code> 是参数 ID，<code>x</code> 用于函数曲线的横坐标。支持 <code>+ - * / ^</code>、括号、<code>sin</code>、<code>cos</code>、<code>sqrt</code> 等常用函数；不能输入任意 JavaScript。</span></div>
         </section>
 
-        <section class="doc-section" id="templates"><div class="section-heading"><span class="chapter">03 / 现成内容</span><h2>先改模板，再做自己的作品</h2><p>编辑器左侧「快速开始」提供六个能直接播放、修改、导出的示例。切换模板会替换当前项目，请先保存自己的改动。</p></div>
+        <section class="doc-section" id="templates"><div class="section-heading"><span class="chapter">03 / 现成内容</span><h2>先改模板，再做自己的作品</h2><p>点击编辑器左侧「模板」图标，可打开六个能直接播放、修改、导出的示例。切换模板会替换当前项目，请先保存自己的改动。</p></div>
           <div class="template-cards"><article><span class="template-glyph teal">∿</span><h3>正弦函数</h3><p>播放时观察运动点与图像。在右侧调「振幅」和「频率」，看看曲线和读数如何同步变化。</p></article><article><span class="template-glyph teal">◯</span><h3>单位圆</h3><p>改变显示半径和角速度，观察旋转点、正弦与余弦投影如何同步变化。</p></article><article><span class="template-glyph blue">↗</span><h3>抛体运动</h3><p>拖动「初速度」等参数，观察轨迹、位置和速度。示例使用忽略空气阻力的理想模型。</p></article><article><span class="template-glyph blue">◡</span><h3>单摆运动</h3><p>调整摆长、初始摆角和重力加速度，查看小角度近似模型下的摆球位置与周期。</p></article><article><span class="template-glyph amber">⌕</span><h3>二分查找</h3><p>用播放进度逐步查看比较位置、左右边界和最后找到的目标。</p></article><article><span class="template-glyph amber">▥</span><h3>冒泡排序</h3><p>拖动时间线观察相邻逆序元素交换，柱形最终按数值从小到大排列。</p></article></div>
           <p class="note">要自己画函数图像：先在「对象图层」添加「坐标系」，再添加「函数曲线」。选中曲线后，在检查器的「函数 y = f(x)」里输入如 <code>sin(x)</code>。</p>
         </section>

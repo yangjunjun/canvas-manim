@@ -24,7 +24,7 @@ pnpm run check:sdk
 
 编辑器界面使用 shadcn-vue 的 `a2LKcc4` preset（Reka Mira / Neutral / Inter）与 Tailwind CSS 4。主题配置在 `components.json` 和 `src/shadcn.css`；画布内部的深色配色属于作品内容，不随编辑器主题改变。Inter 字体随构建本地打包，无需在线字体服务。
 
-编辑器左侧「快速开始」内置六个可编辑项目：正弦函数、单位圆、抛体运动、单摆运动、二分查找和冒泡排序。新增三个项目在 SDK 中分别可通过 `templates.unitCircle()`、`templates.pendulum()`、`templates.bubbleSort()` 创建。
+点击编辑器左侧「模板」图标可打开六个可编辑项目：正弦函数、单位圆、抛体运动、单摆运动、二分查找和冒泡排序。新增三个项目在 SDK 中分别可通过 `templates.unitCircle()`、`templates.pendulum()`、`templates.bubbleSort()` 创建。
 
 ## SDK 使用
 
