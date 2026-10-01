@@ -445,6 +445,36 @@ try {
     const saved = JSON.parse(strFromU8(unzipSync(await readFile(await extensionDownload.path()))['project.json']))
     assert.deepEqual(saved.extensions, extensionProject.extensions)
   } finally { await extensionPage.close() }
+  const codeRoundtripPage = await browser.newPage({ viewport: { width: 1500, height: 960 }, acceptDownloads: true })
+  try {
+    await codeRoundtripPage.goto(baseURL, { waitUntil: 'networkidle' })
+    const fromCode = { schemaVersion: 1, name: '代码创建的作品', canvas: { width: 1280, height: 720, fit: 'contain' }, scenes: [{ id: 'from-code', name: '代码场景', duration: 4,
+      params: [{ id: 'height', label: '高度', value: 200, min: 100, max: 400, step: 10, unit: 'px' }],
+      nodes: [{ id: 'ball', type: 'circle', name: '代码小球', x: 100, y: 200, radius: 20, fill: '#5eead4', bindings: { y: 'height' } }],
+      tracks: [{ nodeId: 'ball', property: 'x', keyframes: [{ time: 0, value: 100 }, { time: 2, value: 500, easing: 'easeInOut' }] }],
+    }], assets: [], extensions: { 'code.meta': { source: 'sdk' } } }
+    await codeRoundtripPage.locator('input[type=file][accept*=".cmanim"]').setInputFiles({ name: 'from-code.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(fromCode)) })
+    await codeRoundtripPage.locator('.node-list button').first().click()
+    await codeRoundtripPage.getByRole('spinbutton', { name: '半径' }).fill('32')
+    await codeRoundtripPage.getByRole('spinbutton', { name: '半径' }).press('Tab')
+    const codeDownloadPromise = codeRoundtripPage.waitForEvent('download')
+    await codeRoundtripPage.getByRole('button', { name: '保存项目' }).click()
+    const codeDownload = await codeDownloadPromise
+    const edited = JSON.parse(strFromU8(unzipSync(await readFile(await codeDownload.path()))['project.json']))
+    assert.equal(edited.scenes[0].nodes[0].radius, 32)
+    assert.deepEqual(edited.scenes[0].tracks, fromCode.scenes[0].tracks)
+    assert.deepEqual(edited.scenes[0].params, fromCode.scenes[0].params)
+    assert.deepEqual(edited.extensions, fromCode.extensions)
+    if (sdkSourceAvailable) {
+      const sdkFrame = await codeRoundtripPage.evaluate(async ({ url, project }) => {
+        const { validateProject, evaluateScene } = await import(url)
+        const scene = validateProject(project).scenes[0]
+        const node = evaluateScene(scene, 1, { height: 250 }, { canvas: project.canvas }).nodes[0]
+        return { x: node.x, y: node.y, radius: node.radius }
+      }, { url: sdkSourceUrl, project: edited })
+      assert.deepEqual(sdkFrame, { x: 300, y: 250, radius: 32 })
+    }
+  } finally { await codeRoundtripPage.close() }
   const sharePage = await browser.newPage({ viewport: { width: 1500, height: 960 } })
   try {
     await sharePage.goto(baseURL, { waitUntil: 'networkidle' })
