@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { evaluateExpression } from '../src/core/expression.ts'
 import { evaluateScene, validateProject } from '../src/core/engine.ts'
+import { resolveExportRange } from '../src/core/export.ts'
 import { projectFromBlob, projectToBlob } from '../src/core/project-file.ts'
 import { createBlankProject, templates } from '../src/core/templates.ts'
 
@@ -10,6 +11,110 @@ test('表达式支持受限数学运算并拒绝任意代码', () => {
   assert.equal(evaluateExpression('-2^2', {}), -4)
   assert.throws(() => evaluateExpression('window.alert(1)', {}))
   assert.throws(() => evaluateExpression('unknown+1', {}), /未知变量/)
+})
+
+test('导出时间段校验与可见性轨道求值', () => {
+  assert.deepEqual(resolveExportRange(8), { start: 0, end: 8 })
+  assert.deepEqual(resolveExportRange(8, { start: 2, end: 5 }), { start: 2, end: 5 })
+  for (const range of [{ start: -1, end: 4 }, { start: 4, end: 4 }, { start: 7, end: 9 }]) {
+    assert.throws(() => resolveExportRange(8, range), /导出时间范围/)
+  }
+  const project = createBlankProject()
+  const scene = project.scenes[0]
+  scene.nodes.push({ id: 'shape', type: 'circle', name: '圆', x: 10, y: 20, radius: 5 })
+  scene.tracks.push({ nodeId: 'shape', property: 'visible', keyframes: [
+    { time: 0, value: false, easing: 'step' }, { time: 2, value: true, easing: 'step' },
+  ] })
+  validateProject(project)
+  assert.equal(evaluateScene(scene, 1).nodes[0].visible, false)
+  assert.equal(evaluateScene(scene, 2).nodes[0].visible, true)
+  scene.tracks[0].keyframes[1].value = 'true'
+  assert.throws(() => validateProject(project), /可见性无效/)
+})
+
+test('十六进制颜色轨道在中间时刻按 sRGB 通道插值', () => {
+  const scene = createBlankProject().scenes[0]
+  scene.nodes.push({ id: 'shape', type: 'circle', name: '圆', x: 0, y: 0, radius: 5, fill: '#000000' })
+  scene.tracks.push({ nodeId: 'shape', property: 'fill', keyframes: [
+    { time: 0, value: '#000000', easing: 'linear' }, { time: 2, value: '#ffffff' },
+  ] })
+  assert.equal(evaluateScene(scene, 1).nodes[0].fill, '#808080')
+  scene.tracks[0].keyframes[0].easing = 'step'
+  assert.equal(evaluateScene(scene, 1).nodes[0].fill, '#000000')
+})
+
+test('路径顶点必须为有限坐标，多边形至少三个顶点', () => {
+  const project = createBlankProject()
+  const node = { id: 'polygon', type: 'polygon' as const, name: '多边形', x: 0, y: 0, points: [[0, 0], [10, 0], [0, 10]] as Array<[number, number]> }
+  project.scenes[0].nodes.push(node)
+  validateProject(project)
+  node.points.pop()
+  assert.throws(() => validateProject(project), /顶点无效/)
+  node.points.push([Number.NaN, 10])
+  assert.throws(() => validateProject(project), /顶点无效/)
+})
+
+test('导入损坏的场景项和轨道项返回可定位错误', () => {
+  const project = createBlankProject()
+  project.scenes[0].nodes = [null] as unknown as typeof project.scenes[0]['nodes']
+  assert.throws(() => validateProject(project), /场景.*对象无效/)
+  project.scenes[0].nodes = []
+  project.scenes[0].tracks = [{ nodeId: 'lost', property: 'x' }] as unknown as typeof project.scenes[0]['tracks']
+  assert.throws(() => validateProject(project), /轨道.*无效/)
+  project.scenes[0].tracks = []
+  project.scenes[0].nodes = [{ id: 'image', type: 'image', name: '图片', x: 0, y: 0, assetId: 'lost' }]
+  assert.throws(() => validateProject(project), /图片资源引用无效/)
+})
+
+test('扩展数据往返保留，运行时回调和循环引用给出明确保存错误', async () => {
+  const project = createBlankProject()
+  project.extensions = { 'example.notes': { tags: ['math', 'teaching'], version: 2 } }
+  assert.deepEqual((await projectFromBlob(projectToBlob(project))).extensions, project.extensions)
+  project.extensions = { callback: () => 1 }
+  assert.throws(() => projectToBlob(project), /无法序列化的运行时数据/)
+  const cyclic: Record<string, unknown> = {}
+  cyclic.self = cyclic
+  project.extensions = { cyclic }
+  assert.throws(() => projectToBlob(project), /循环引用/)
+})
+
+test('代码创建的分组、路径、图片、参数、时间线和扩展数据可在项目文件往返', async () => {
+  const project = createBlankProject()
+  project.assets.push({ id: 'pixel', name: '像素', mime: 'image/png', data: 'AQID' })
+  project.extensions = { 'example.meta': { author: 'SDK', version: 1 } }
+  const scene = project.scenes[0]
+  scene.params.push({ id: 'distance', label: '距离', value: 10, min: 0, max: 100, step: 1, unit: 'px' })
+  scene.nodes.push(
+    { id: 'group', type: 'group', name: '分组', x: 50, y: 60 },
+    { id: 'path', type: 'path', name: '路径', x: 0, y: 0, parentId: 'group', points: [[0, 0], [30, 20]], bindings: { x: 'distance+t' } },
+    { id: 'polygon', type: 'polygon', name: '多边形', x: 20, y: 20, points: [[0, 0], [20, 0], [10, 20]], fill: '#ff0000' },
+    { id: 'image', type: 'image', name: '图片', x: 100, y: 100, assetId: 'pixel', width: 10, height: 10 },
+  )
+  scene.tracks.push(
+    { nodeId: 'polygon', property: 'fill', keyframes: [{ time: 0, value: '#ff0000' }, { time: 2, value: '#0000ff' }] },
+    { nodeId: 'image', property: 'visible', keyframes: [{ time: 0, value: false }, { time: 1, value: true }] },
+  )
+  const loaded = await projectFromBlob(projectToBlob(project))
+  assert.deepEqual(loaded, project)
+  assert.equal(evaluateScene(loaded.scenes[0], 1, { distance: 20 }).nodes.find(node => node.id === 'path')?.x, 21)
+  assert.equal(evaluateScene(loaded.scenes[0], 1).nodes.find(node => node.id === 'polygon')?.fill, '#800080')
+  assert.equal(evaluateScene(loaded.scenes[0], 1).nodes.find(node => node.id === 'image')?.visible, true)
+})
+
+test('单个对象表达式失败时可报告并继续求值其余对象，修复后恢复', () => {
+  const scene = createBlankProject().scenes[0]
+  scene.nodes.push(
+    { id: 'broken', type: 'circle', name: '错误对象', x: 10, y: 20, radius: 5, bindings: { x: 'unknown+1' } },
+    { id: 'working', type: 'circle', name: '正常对象', x: 30, y: 40, radius: 5, bindings: { x: 't+30' } },
+  )
+  const errors: string[] = []
+  const result = evaluateScene(scene, 2, {}, error => errors.push(error.message))
+  assert.match(errors[0], /错误对象.*x 表达式.*未知变量/)
+  assert.equal(result.nodes[1].x, 32)
+  scene.nodes[0].bindings!.x = 't+10'
+  errors.length = 0
+  assert.equal(evaluateScene(scene, 2, {}, error => errors.push(error.message)).nodes[0].x, 12)
+  assert.deepEqual(errors, [])
 })
 
 test('同一时刻的场景状态与访问路径无关', () => {

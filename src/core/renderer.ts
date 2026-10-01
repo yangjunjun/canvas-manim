@@ -56,7 +56,7 @@ export class ResourceCache {
     return this.images.get(id)!
   }
 
-  async preload(project: Project, sceneId: string): Promise<void> {
+  async preload(project: Project, sceneId: string, onNodeError?: (error: Error) => void): Promise<void> {
     const scene = project.scenes.find(item => item.id === sceneId)
     if (!scene) throw new Error('场景不存在')
     if (typeof document !== 'undefined' && document.fonts) {
@@ -64,8 +64,14 @@ export class ResourceCache {
       if (text) await document.fonts.load('24px "Noto Sans SC"', text)
     }
     await Promise.all(scene.nodes.map(async node => {
-      if (node.type === 'formula') await this.formula(node.text ?? '', node.fontSize ?? 28, node.fill ?? '#ffffff')
-      if (node.type === 'image' && node.assetId) await this.image(node.assetId, project)
+      try {
+        if (node.type === 'formula') await this.formula(node.text ?? '', node.fontSize ?? 28, node.fill ?? '#ffffff')
+        if (node.type === 'image' && node.assetId) await this.image(node.assetId, project)
+      } catch (cause) {
+        const error = new Error(`对象「${node.name}」资源加载失败：${cause instanceof Error ? cause.message : String(cause)}`)
+        if (!onNodeError) throw error
+        onNodeError(error)
+      }
     }))
   }
 
@@ -130,7 +136,7 @@ function drawArrowHead(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2
   ctx.fill()
 }
 
-export function renderScene(canvas: HTMLCanvasElement, project: Project, state: EvaluatedScene, resources: ResourceCache, background = '#0b1220'): void {
+export function renderScene(canvas: HTMLCanvasElement, project: Project, state: EvaluatedScene, resources: ResourceCache, background = '#0b1220', onNodeError?: (error: Error) => void): void {
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('浏览器不支持 Canvas 2D')
   const logicalWidth = project.canvas.width, logicalHeight = project.canvas.height
@@ -142,10 +148,11 @@ export function renderScene(canvas: HTMLCanvasElement, project: Project, state: 
   const byId = new Map(nodes.map(node => [node.id, node]))
   for (const node of nodes) {
     if (node.type === 'group' || node.visible === false || (node.opacity ?? 1) <= 0) continue
+    try {
+    ctx.save()
     const axes = node.axesId ? byId.get(node.axesId) : undefined
     const [x, y] = axes ? axesPoint(axes, node.x, node.y) : [node.x, node.y]
     const [x2, y2] = axes && node.x2 !== undefined && node.y2 !== undefined ? axesPoint(axes, node.x2, node.y2) : [node.x2 ?? x, node.y2 ?? y]
-    ctx.save()
     ctx.globalAlpha = node.opacity ?? 1
     ctx.lineWidth = node.lineWidth ?? 2
     if (node.lineDash) ctx.setLineDash(node.lineDash)
@@ -179,11 +186,12 @@ export function renderScene(canvas: HTMLCanvasElement, project: Project, state: 
       ctx.rect(axes.x, axes.y, axes.width ?? 1, axes.height ?? 1)
       ctx.clip()
       ctx.beginPath()
-      let active = false, previousY = 0
+      let active = false, previousY = 0, expressionError: Error | undefined
       for (let i = 0; i <= count; i++) {
         const xv = xmin + (xmax - xmin) * i / count
         let yv: number
-        try { yv = evaluateExpression(node.expression, { ...state.params, t: state.time, x: xv }) } catch { yv = NaN }
+        try { yv = evaluateExpression(node.expression, { ...state.params, t: state.time, x: xv }) }
+        catch (cause) { yv = NaN; expressionError ??= cause instanceof Error ? cause : new Error(String(cause)) }
         if (!Number.isFinite(yv) || Math.abs(yv) > 1e6 || (active && Math.abs(yv - previousY) > (ymax - ymin) * 1.2)) { active = false; continue }
         const [px, py] = axesPoint(axes, xv, yv)
         if (!active) ctx.moveTo(px, py)
@@ -192,6 +200,7 @@ export function renderScene(canvas: HTMLCanvasElement, project: Project, state: 
       }
       ctx.stroke()
       ctx.restore()
+      if (expressionError) throw new Error(`函数表达式：${expressionError.message}`)
     } else if (node.type === 'circle' || node.type === 'point') {
       ctx.beginPath(); ctx.arc(x, y, (node.radius ?? 18) * (node.scale ?? 1), 0, Math.PI * 2); ctx.fill()
       if (node.stroke) ctx.stroke()
@@ -223,5 +232,11 @@ export function renderScene(canvas: HTMLCanvasElement, project: Project, state: 
       if (image) { ctx.translate(x, y); ctx.rotate(node.rotation ?? 0); ctx.drawImage(image, 0, 0, node.width ?? image.width, node.height ?? image.height) }
     }
     ctx.restore()
+    } catch (cause) {
+      const error = new Error(`对象「${node.name}」渲染失败：${cause instanceof Error ? cause.message : String(cause)}`)
+      if (!onNodeError) throw error
+      onNodeError(error)
+      ctx.restore()
+    }
   }
 }

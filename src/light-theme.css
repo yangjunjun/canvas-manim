@@ -25,6 +25,21 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .export-option-icon { display: grid; place-items: center; flex: none; width: 29px; height: 29px; border: 1px solid var(--border); border-radius: var(--radius); color: var(--muted-foreground); background: var(--card); font-size: 15px; }
 .export-option strong { display: block; font-size: 12px; line-height: 1.4; }
 .export-option small { display: block; margin-top: 2px; color: var(--muted-foreground); font-size: 10px; line-height: 1.4; }
+.export-range { padding: 9px 10px 11px; border-bottom: 1px solid var(--border); }
+.export-range strong, .extension-view strong, .point-editor strong { font-size: 11px; color: var(--foreground); }
+.export-range .field-row { margin: 7px 0; }
+.export-range label { display: grid; gap: 4px; color: var(--muted-foreground); font-size: 10px; }
+.export-range input { width: 100%; min-width: 0; height: 29px; }
+.export-range small, .extension-view p, .point-editor > small { color: var(--muted-foreground); font-size: 10px; line-height: 1.4; }
+.extension-view { min-width: 0; border-top: 1px solid var(--border); padding-top: 10px; }
+.extension-view p { margin: 5px 0 8px; }
+.extension-view pre { max-height: 220px; overflow: auto; padding: 9px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--secondary); color: var(--foreground); font-size: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.point-editor { display: grid; gap: 8px; min-width: 0; }
+.point-editor-heading, .point-editor-row { display: flex; align-items: center; gap: 6px; }
+.point-editor-heading { justify-content: space-between; }
+.point-editor-row > span { width: 16px; color: var(--muted-foreground); font-size: 10px; }
+.point-editor-row label { flex: 1; min-width: 0; }
+.point-editor-row button { flex: none; }
 
 .main-layout { --left-size: 244px; --right-size: 300px; display: grid; grid-template-columns: var(--left-size) minmax(0, 1fr) var(--right-size); min-height: calc(100vh - var(--topbar-height) - 32px); transition: grid-template-columns .2s ease; }
 .main-layout.left-collapsed { --left-size: 0px; }

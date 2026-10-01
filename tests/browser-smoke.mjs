@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile, stat } from 'node:fs/promises'
 import { strFromU8, unzipSync } from 'fflate'
-import { chromium } from 'playwright-core'
+import { chromium, firefox, webkit } from 'playwright-core'
 
 const baseURL = process.env.CANVAS_MANIM_URL ?? 'http://127.0.0.1:5173/'
 async function chooseOption(page, label, option) {
@@ -15,16 +15,20 @@ async function setEditorSlider(page, label, value, min, max) {
   assert.ok(bounds)
   await track.click({ position: { x: Math.max(7, Math.min(bounds.width - 7, (value - min) / (max - min) * bounds.width)), y: bounds.height / 2 } })
 }
-const browser = await chromium.launch({
+const browserName = process.env.CANVAS_MANIM_BROWSER ?? 'chromium'
+const browserType = { chromium, firefox, webkit }[browserName]
+if (!browserType) throw new Error(`不支持的浏览器类型：${browserName}`)
+const browser = await browserType.launch({
   headless: true,
-  executablePath: process.env.CANVAS_MANIM_CHROMIUM || chromium.executablePath(),
-  args: ['--no-sandbox', '--disable-dev-shm-usage'],
+  ...(browserName === 'chromium' ? { executablePath: process.env.CANVAS_MANIM_CHROMIUM || chromium.executablePath(), args: ['--no-sandbox', '--disable-dev-shm-usage'] } : {}),
 })
 
 try {
   const page = await browser.newPage({ viewport: { width: 1500, height: 960 }, acceptDownloads: true })
   const errors = []
+  const remoteRequests = []
   page.on('pageerror', error => errors.push(error.message))
+  page.on('request', request => { if (new URL(request.url()).origin !== new URL(baseURL).origin) remoteRequests.push(request.url()) })
   await page.goto(baseURL, { waitUntil: 'networkidle' })
   await page.getByRole('heading', { name: /正弦函数/ }).waitFor()
   const themeBackground = await page.locator('.workspace').evaluate(node => getComputedStyle(node).backgroundColor)
@@ -252,9 +256,16 @@ try {
   await page.getByLabel('时长（秒）').press('Tab')
   const framesPromise = page.waitForEvent('download')
   await exportTrigger.click()
+  await page.getByRole('spinbutton', { name: '导出开始时间' }).fill('0.2')
+  await page.getByRole('spinbutton', { name: '导出开始时间' }).press('Tab')
   await page.getByRole('menuitem', { name: /逐帧 ZIP/ }).click()
   const framesDownload = await framesPromise
   assert.ok((await stat(await framesDownload.path())).size > 1000)
+  const frameFiles = unzipSync(await readFile(await framesDownload.path()))
+  const manifest = JSON.parse(strFromU8(frameFiles['manifest.json']))
+  assert.equal(manifest.start, 0.2)
+  assert.equal(manifest.end, 0.5)
+  assert.equal(Object.keys(frameFiles).filter(name => name.startsWith('frames/')).length, manifest.frames)
   await exportTrigger.click()
   if (await page.getByRole('menuitem', { name: /视频 WebM|视频 MP4/ }).isEnabled()) {
     const videoPromise = page.waitForEvent('download')
@@ -286,22 +297,33 @@ try {
   await page.getByRole('button', { name: '播放' }).click()
   await page.getByRole('button', { name: '暂停' }).waitFor()
   const sdkSourceUrl = new URL('src/sdk.ts', baseURL).href
-  const sdkSourceAvailable = (await page.request.get(sdkSourceUrl)).ok()
+  const sdkSourceResponse = await page.request.get(sdkSourceUrl)
+  const sdkSourceAvailable = sdkSourceResponse.ok() && /javascript/.test(sdkSourceResponse.headers()['content-type'] ?? '')
   if (sdkSourceAvailable) {
     const isolated = await page.evaluate(async sourceUrl => {
       const { mountPlayer, templates } = await import(sourceUrl)
       const firstHost = document.createElement('div')
       const secondHost = document.createElement('div')
       document.body.append(firstHost, secondHost)
-      const first = mountPlayer(firstHost, templates.math())
+      let invalidSceneError = ''
+      try { mountPlayer(firstHost, templates.math(), 'missing-scene') } catch (error) { invalidSceneError = error.message }
+      const first = mountPlayer(firstHost, templates.math(), { width: 320, height: 180, params: { amp: 1.4 } })
       const second = mountPlayer(secondHost, templates.physics())
+      const initialAmp = first.currentParams.amp
+      const firstSize = [first.canvas.style.width, first.canvas.style.height, first.canvas.style.objectFit]
       first.seek(2)
       first.setParams({ amp: 1.7 })
+      let invalidParamError = ''
+      try { first.setParams({ amp: 999 }) } catch (error) { invalidParamError = error.message }
       second.seek(3)
       const result = {
         firstTime: first.currentTime,
+        invalidSceneError,
+        initialAmp,
+        firstSize,
         secondTime: second.currentTime,
         firstAmp: first.currentParams.amp,
+        invalidParamError,
         secondAmp: second.currentParams.amp,
         mounted: firstHost.querySelectorAll('canvas').length + secondHost.querySelectorAll('canvas').length,
       }
@@ -309,16 +331,48 @@ try {
       second.destroy()
       return { ...result, remaining: firstHost.querySelectorAll('canvas').length + secondHost.querySelectorAll('canvas').length }
     }, sdkSourceUrl)
-    assert.deepEqual(isolated, { firstTime: 2, secondTime: 3, firstAmp: 1.7, secondAmp: undefined, mounted: 2, remaining: 0 })
+    assert.deepEqual(isolated, { firstTime: 2, invalidSceneError: '场景 missing-scene 不存在', initialAmp: 1.4, firstSize: ['320px', '180px', 'contain'], secondTime: 3, firstAmp: 1.7, invalidParamError: '参数 amp 须在 0.2 到 1.8 之间', secondAmp: undefined, mounted: 2, remaining: 0 })
+    const recovery = await page.evaluate(async sourceUrl => {
+      const { mountPlayer, createBlankProject } = await import(sourceUrl)
+      const project = createBlankProject()
+      project.canvas.width = 120; project.canvas.height = 80
+      project.assets.push({ id: 'broken', name: '损坏图片', mime: 'image/png', data: 'AQID' })
+      project.scenes[0].nodes = [
+        { id: 'broken-image', type: 'image', name: '损坏图片', x: 0, y: 0, assetId: 'broken' },
+        { id: 'circle', type: 'circle', name: '正常圆', x: 60, y: 40, radius: 12, fill: '#ff0000' },
+      ]
+      const host = document.createElement('div')
+      document.body.append(host)
+      const player = mountPlayer(host, project)
+      const failures = []
+      player.onError = error => failures.push(error.message)
+      await new Promise(resolve => setTimeout(resolve, 100))
+      const before = Array.from(player.canvas.getContext('2d').getImageData(60, 40, 1, 1).data)
+      project.scenes[0].nodes.shift()
+      player.setProject(project)
+      await new Promise(resolve => setTimeout(resolve, 100))
+      const after = Array.from(player.canvas.getContext('2d').getImageData(60, 40, 1, 1).data)
+      player.destroy()
+      host.remove()
+      return { failures, before, after }
+    }, sdkSourceUrl)
+    assert.match(recovery.failures[0], /损坏图片.*资源加载失败/)
+    assert.deepEqual(recovery.before.slice(0, 3), [255, 0, 0])
+    assert.deepEqual(recovery.after.slice(0, 3), [255, 0, 0])
   }
   assert.deepEqual(errors, [])
+  assert.deepEqual(remoteRequests, [], '编辑器与 SDK 示例应只加载本地资源')
   const timelinePage = await browser.newPage({ viewport: { width: 1500, height: 960 } })
   try {
     await timelinePage.goto(baseURL, { waitUntil: 'networkidle' })
     await timelinePage.getByRole('button', { name: '新建', exact: true }).click()
     await timelinePage.getByRole('button', { name: '添加对象' }).click()
     await timelinePage.getByRole('menuitem', { name: '圆形' }).click()
+    await chooseOption(timelinePage, '对象可见性', '隐藏')
+    assert.match(await timelinePage.getByRole('combobox', { name: '对象可见性' }).innerText(), /隐藏/)
+    await chooseOption(timelinePage, '对象可见性', '显示')
     await chooseOption(timelinePage, '动画属性', 'Y 位置')
+    await timelinePage.getByRole('combobox', { name: '动画属性' }).getByText('Y 位置').waitFor()
     assert.match(await timelinePage.getByRole('combobox', { name: '动画属性' }).innerText(), /Y 位置/)
     await chooseOption(timelinePage, '动画属性', 'X 位置')
     const ruler = timelinePage.locator('.ruler-line')
@@ -353,7 +407,74 @@ try {
     await timelinePage.getByRole('button', { name: '删除关键帧' }).click()
     assert.equal(await timelinePage.locator('.keyframe-marker').count(), 1)
     assert.equal(await timelinePage.locator('.track-row').count(), 1)
+    await chooseOption(timelinePage, '动画属性', '显示 / 隐藏')
+    await ruler.click({ position: { x: 2, y: rulerBounds.height / 2 } })
+    await timelinePage.getByRole('button', { name: '＋ 关键帧' }).click()
+    await chooseOption(timelinePage, '关键帧值', '隐藏')
+    assert.equal(await timelinePage.locator('.track-row').count(), 2)
+    await timelinePage.getByRole('button', { name: '添加对象' }).click()
+    await timelinePage.getByRole('menuitem', { name: '路径' }).click()
+    const timelineObjectTool = timelinePage.getByRole('navigation', { name: '右侧工具' }).getByRole('button', { name: '属性' })
+    if (await timelineObjectTool.getAttribute('aria-pressed') !== 'true') await timelineObjectTool.click()
+    assert.equal(await timelinePage.locator('.point-editor-row').count(), 3)
+    await timelinePage.getByRole('button', { name: '添加顶点' }).click()
+    assert.equal(await timelinePage.locator('.point-editor-row').count(), 4)
+    await timelinePage.getByRole('spinbutton', { name: '顶点 4 X' }).fill('240')
+    await timelinePage.getByRole('spinbutton', { name: '顶点 4 X' }).press('Tab')
+    const pathDownloadPromise = timelinePage.waitForEvent('download')
+    await timelinePage.getByRole('button', { name: '保存项目' }).click()
+    const pathDownload = await pathDownloadPromise
+    const pathProject = JSON.parse(strFromU8(unzipSync(await readFile(await pathDownload.path()))['project.json']))
+    assert.equal(pathProject.scenes[0].nodes.find(node => node.type === 'path').points[3][0], 240)
+    assert.equal(pathProject.scenes[0].tracks.find(track => track.property === 'visible').keyframes[0].value, false)
   } finally { await timelinePage.close() }
+  const extensionPage = await browser.newPage({ viewport: { width: 1500, height: 960 }, acceptDownloads: true })
+  try {
+    await extensionPage.goto(baseURL, { waitUntil: 'networkidle' })
+    const extensionProject = { schemaVersion: 1, name: '扩展测试', canvas: { width: 320, height: 180, fit: 'contain' }, scenes: [{ id: 'scene', name: '场景', duration: 2, params: [], nodes: [], tracks: [] }], assets: [], extensions: { 'example.notes': { summary: '只读保留' } } }
+    await extensionPage.locator('input[type=file][accept*=".cmanim"]').setInputFiles({ name: 'extension.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(extensionProject)) })
+    await extensionPage.getByText('扩展数据 · 只读').waitFor()
+    assert.match(await extensionPage.locator('.extension-view pre').innerText(), /只读保留/)
+    const extensionDownloadPromise = extensionPage.waitForEvent('download')
+    await extensionPage.getByRole('button', { name: '保存项目' }).click()
+    const extensionDownload = await extensionDownloadPromise
+    const saved = JSON.parse(strFromU8(unzipSync(await readFile(await extensionDownload.path()))['project.json']))
+    assert.deepEqual(saved.extensions, extensionProject.extensions)
+  } finally { await extensionPage.close() }
+  const keyboardPage = await browser.newPage({ viewport: { width: 1500, height: 960 } })
+  try {
+    await keyboardPage.goto(baseURL, { waitUntil: 'networkidle' })
+    const playButton = keyboardPage.getByRole('button', { name: '播放', exact: true })
+    await playButton.focus()
+    await keyboardPage.keyboard.press('Enter')
+    await keyboardPage.getByRole('button', { name: '暂停', exact: true }).waitFor()
+    await keyboardPage.keyboard.press('Enter')
+    await keyboardPage.getByRole('button', { name: '播放', exact: true }).waitFor()
+    const progress = keyboardPage.getByRole('slider', { name: '播放进度' })
+    await progress.focus()
+    const beforeProgress = Number(await progress.getAttribute('aria-valuenow'))
+    await keyboardPage.keyboard.press('ArrowRight')
+    assert.ok(Number(await progress.getAttribute('aria-valuenow')) > beforeProgress)
+    await keyboardPage.getByRole('navigation', { name: '右侧工具' }).getByRole('button', { name: '参数' }).click()
+    const amp = keyboardPage.getByRole('slider', { name: '振幅 A' })
+    await amp.focus()
+    const beforeAmp = Number(await amp.getAttribute('aria-valuenow'))
+    await keyboardPage.keyboard.press('ArrowRight')
+    assert.ok(Number(await amp.getAttribute('aria-valuenow')) > beforeAmp)
+    await keyboardPage.getByRole('button', { name: '新建', exact: true }).click()
+    await keyboardPage.getByRole('button', { name: '添加对象' }).click()
+    await keyboardPage.getByRole('menuitem', { name: '圆形' }).click()
+    const layer = keyboardPage.locator('.node-list button').first()
+    await layer.focus()
+    await keyboardPage.keyboard.press('Enter')
+    assert.match(await keyboardPage.locator('.canvas-badge').innerText(), /圆形/)
+    const xField = keyboardPage.getByRole('spinbutton', { name: 'X 位置' })
+    await xField.focus()
+    await keyboardPage.keyboard.press('ControlOrMeta+A')
+    await keyboardPage.keyboard.type('520')
+    await keyboardPage.keyboard.press('Tab')
+    assert.equal(await xField.inputValue(), '520')
+  } finally { await keyboardPage.close() }
   const mobile = await browser.newPage({ viewport: { width: 720, height: 900 } })
   try {
     await mobile.goto(baseURL, { waitUntil: 'networkidle' })
@@ -375,7 +496,7 @@ try {
     assert.ok((await phone.getByRole('button', { name: '新建', exact: true }).boundingBox()).height <= 36)
     assert.equal(await phone.locator('.ruler-line span:visible').count(), 5)
   } finally { await phone.close() }
-  console.log(`Browser smoke passed: light theme, tool rails and panels, guide, editor, six templates, timeline, project roundtrip, exports, SDK demo${sdkSourceAvailable ? ' and player isolation' : ''}`)
+  console.log(`${browserName} smoke passed: light theme, tool rails and panels, guide, editor, six templates, timeline, project roundtrip, exports, SDK demo${sdkSourceAvailable ? ' and player isolation' : ''}`)
 } finally {
   await browser.close()
 }

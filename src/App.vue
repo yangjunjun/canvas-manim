@@ -5,7 +5,7 @@ import { evaluateScene, validateProject } from './core/engine.ts'
 import { hitTestScene, selectionBounds } from './core/hit-test.ts'
 import { projectFromBlob, projectToBlob } from './core/project-file.ts'
 import { createBlankProject, templates } from './core/templates.ts'
-import { download, exportFrames, exportPng, exportVideo, supportedVideoType } from './core/export.ts'
+import { download, exportFrames, exportPng, exportVideo, resolveExportRange, supportedVideoType } from './core/export.ts'
 import { ArrowUpRight, ChartNoAxesCombined, ChevronDown, Circle, Crosshair, Dot, Download, Folder, Image, Layers3, ListVideo, Minus, Pause, PenLine, Pentagon, Play, Plus, RectangleHorizontal, Redo2, Settings2, Sigma, SkipForward, SlidersHorizontal, SlidersVertical, Sparkles, Type, Undo2 } from '@lucide/vue'
 import { Button } from './components/ui/button'
 import { CollapsiblePanel } from './components/ui/collapsible'
@@ -57,9 +57,10 @@ const canvasPresetGroups = canvasPresets.map(group => ({ label: group.group, opt
 const animationOptions = [
   { value: 'x', label: 'X 位置' }, { value: 'y', label: 'Y 位置' },
   { value: 'opacity', label: '透明度' }, { value: 'rotation', label: '旋转' },
-  { value: 'scale', label: '缩放' }, { value: 'fill', label: '填充色' },
-  { value: 'text', label: '文字' },
+  { value: 'scale', label: '缩放' }, { value: 'fill', label: '填充色' }, { value: 'stroke', label: '描边色' },
+  { value: 'text', label: '文字' }, { value: 'visible', label: '显示 / 隐藏' },
 ]
+const visibilityOptions = [{ value: 'true', label: '显示' }, { value: 'false', label: '隐藏' }]
 const easingOptions = [
   { value: 'linear', label: '线性' }, { value: 'easeInOut', label: '缓入缓出' }, { value: 'step', label: '阶跃' },
 ]
@@ -67,6 +68,10 @@ const paramValues = ref<Record<string, number>>({})
 const undoStack: Project[] = []
 const redoStack: Project[] = []
 const scene = computed(() => project.value.scenes.find(item => item.id === sceneId.value) ?? project.value.scenes[0])
+const exportStart = ref(0)
+const exportEnd = ref(scene.value.duration)
+watch(() => scene.value.duration, duration => { exportStart.value = 0; exportEnd.value = duration })
+watch(sceneId, () => { exportStart.value = 0; exportEnd.value = scene.value.duration })
 const activeKeyframe = computed(() => {
   const selection = selectedKeyframe.value
   if (!selection) return null
@@ -192,7 +197,8 @@ function closePanels(): void { activeLeftPanel.value = null; activeRightPanel.va
 
 function syncPlayer(keepTime = true): void {
   const time = keepTime ? currentTime.value : 0
-  const values = { ...paramValues.value }
+  const values = Object.fromEntries(Object.entries(paramValues.value).filter(([id, value]) => scene.value.params.some(param => param.id === id && value >= param.min && value <= param.max)))
+  paramValues.value = values
   player.value?.setProject(project.value, sceneId.value)
   player.value?.setParams(values)
   player.value?.seek(time)
@@ -236,6 +242,7 @@ function newProject(key: string): void {
   else project.value = templates[key]()
   undoStack.length = 0; redoStack.length = 0
   sceneId.value = project.value.scenes[0].id
+  exportStart.value = 0; exportEnd.value = scene.value.duration
   selectedId.value = null
   selectedKeyframe.value = null
   activeLeftPanel.value = window.innerWidth < 900 ? null : key === 'blank' ? 'layers' : 'templates'
@@ -259,6 +266,7 @@ function addScene(): void {
 
 function chooseScene(id: string): void {
   sceneId.value = id; selectedId.value = null; currentTime.value = 0
+  paramValues.value = {}
   selectedKeyframe.value = null
   activeRightPanel.value = window.innerWidth < 900 ? null : 'project'
   player.value?.setScene(id)
@@ -342,6 +350,35 @@ function editAxisRange(axis: 'xRange' | 'yRange', index: 0 | 1, event: Event): v
   commit(draft => { const node = draft.scenes.find(item => item.id === sceneId.value)!.nodes.find(item => item.id === id)!; const range = [...(node[axis] ?? [-5, 5])] as [number, number]; range[index] = value; node[axis] = range })
 }
 
+function editPoint(index: number, coordinate: 0 | 1, event: Event): void {
+  if (!selectedId.value) return
+  const value = Number((event.target as HTMLInputElement).value), id = selectedId.value
+  commit(draft => {
+    const node = draft.scenes.find(item => item.id === sceneId.value)!.nodes.find(item => item.id === id)!
+    node.points![index][coordinate] = value
+  })
+}
+
+function addPoint(): void {
+  if (!selectedId.value) return
+  const id = selectedId.value
+  commit(draft => {
+    const points = draft.scenes.find(item => item.id === sceneId.value)!.nodes.find(item => item.id === id)!.points!
+    const last = points.at(-1)!
+    points.push([last[0] + 60, last[1]])
+  })
+}
+
+function removePoint(index: number): void {
+  if (!selectedId.value) return
+  const id = selectedId.value
+  commit(draft => {
+    const node = draft.scenes.find(item => item.id === sceneId.value)!.nodes.find(item => item.id === id)!
+    if (node.points!.length <= (node.type === 'polygon' ? 3 : 2)) throw new Error('顶点数量已达下限')
+    node.points!.splice(index, 1)
+  })
+}
+
 function editBinding(field: string, event: Event): void {
   if (!selectedId.value) return
   const expression = (event.target as HTMLInputElement).value.trim()
@@ -379,9 +416,12 @@ function addKeyframe(): void {
   if (!selectedId.value) { message.value = '先选择一个对象'; return }
   const id = selectedId.value, property = selectedTrack.value as keyof SceneNode
   let value: unknown
-  try { value = (evaluateScene(scene.value, currentTime.value, paramValues.value).nodes.find(node => node.id === id) as unknown as Record<string, unknown>)[property] }
+  try {
+    const node = evaluateScene(scene.value, currentTime.value, paramValues.value).nodes.find(node => node.id === id)!
+    value = property === 'visible' ? node.visible !== false : (node as unknown as Record<string, unknown>)[property]
+  }
   catch (error) { announce(error); return }
-  if (typeof value !== 'number' && typeof value !== 'string') { message.value = '该属性尚无可用值'; return }
+  if (typeof value !== 'number' && typeof value !== 'string' && typeof value !== 'boolean') { message.value = '该属性尚无可用值'; return }
   commit(draft => {
     const target = draft.scenes.find(item => item.id === sceneId.value)!
     const node = target.nodes.find(item => item.id === id)!
@@ -390,7 +430,7 @@ function addKeyframe(): void {
     if (!track) { track = { nodeId: id, property, keyframes: [] }; target.tracks.push(track) }
     const time = Math.min(target.duration, Math.max(0, Number(currentTime.value.toFixed(2))))
     track.keyframes = track.keyframes.filter(item => item.time !== time)
-    track.keyframes.push({ time, value, easing: typeof value === 'number' ? 'linear' : 'step' })
+    track.keyframes.push({ time, value, easing: typeof value === 'number' || property === 'fill' || property === 'stroke' ? 'linear' : 'step' })
     track.keyframes.sort((a, b) => a.time - b.time)
   })
   selectedKeyframe.value = { nodeId: id, property, time: Number(currentTime.value.toFixed(2)) }
@@ -416,7 +456,8 @@ function moveKeyframe(track: Track, index: number, value: number): void {
 function editKeyframeValue(track: Track, index: number, value: string): void {
   commit(draft => {
     const editable = draft.scenes.find(item => item.id === sceneId.value)!.tracks.find(item => item.nodeId === track.nodeId && item.property === track.property)!
-    editable.keyframes[index].value = typeof editable.keyframes[index].value === 'number' ? Number(value) : value
+    editable.keyframes[index].value = typeof editable.keyframes[index].value === 'number' ? Number(value)
+      : typeof editable.keyframes[index].value === 'boolean' ? value === 'true' : value
   })
 }
 
@@ -511,6 +552,7 @@ async function openFile(event: Event): Promise<void> {
   try {
     const loaded = await projectFromBlob(file)
     project.value = loaded; sceneId.value = loaded.scenes[0].id; selectedId.value = null; selectedKeyframe.value = null; currentTime.value = 0; paramValues.value = {}
+    exportStart.value = 0; exportEnd.value = scene.value.duration
     activeLeftPanel.value = window.innerWidth < 900 ? null : 'layers'
     activeRightPanel.value = window.innerWidth < 900 ? null : 'project'
     undoStack.length = 0; redoStack.length = 0; syncPlayer(false)
@@ -543,9 +585,13 @@ async function output(kind: 'png' | 'video' | 'frames'): Promise<void> {
   busy.value = true; message.value = '正在准备资源并导出…'
   try {
     if (kind === 'png') download(await exportPng(project.value, sceneId.value, currentTime.value, paramValues.value), `${scene.value.name}.png`)
-    else if (kind === 'frames') download(await exportFrames(project.value, sceneId.value, paramValues.value), `${scene.value.name}-frames.zip`)
+    else if (kind === 'frames') {
+      const range = resolveExportRange(scene.value.duration, { start: exportStart.value, end: exportEnd.value })
+      download(await exportFrames(project.value, sceneId.value, paramValues.value, 30, range), `${scene.value.name}-frames.zip`)
+    }
     else {
-      const result = await exportVideo(project.value, sceneId.value, paramValues.value)
+      const range = resolveExportRange(scene.value.duration, { start: exportStart.value, end: exportEnd.value })
+      const result = await exportVideo(project.value, sceneId.value, paramValues.value, range)
       download(result.blob, `${scene.value.name}.${result.mime.includes('mp4') ? 'mp4' : 'webm'}`)
     }
     message.value = '导出完成'
@@ -635,8 +681,9 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', keyboard); player.
         <DropdownMenu v-model:open="exportOpen" :modal="false">
           <DropdownMenuTrigger as-child><Button size="lg" class="export-trigger" :disabled="busy"><Download aria-hidden="true" />导出作品<ChevronDown aria-hidden="true" /></Button></DropdownMenuTrigger>
           <DropdownMenuContent id="export-dropdown-panel" align="end" :side-offset="8" class="export-dropdown-panel">
+            <div class="export-range"><strong>导出时间段</strong><div class="field-row"><label>开始（秒）<Input type="number" min="0" :max="scene.duration" step="0.01" :value="exportStart" aria-label="导出开始时间" @change="exportStart = Number(($event.target as HTMLInputElement).value)" /></label><label>结束（秒）<Input type="number" min="0" :max="scene.duration" step="0.01" :value="exportEnd" aria-label="导出结束时间" @change="exportEnd = Number(($event.target as HTMLInputElement).value)" /></label></div><small>用于视频和逐帧 ZIP；PNG 使用当前时刻</small></div>
             <DropdownMenuItem class="export-option" :disabled="busy" @select="output('png')"><span class="export-option-icon" aria-hidden="true">▧</span><span><strong>当前帧 PNG</strong><small>保存当前播放时刻</small></span></DropdownMenuItem>
-            <DropdownMenuItem class="export-option" :disabled="busy || !supportVideo" :title="supportVideo || '浏览器不支持视频录制'" @select="output('video')"><span class="export-option-icon" aria-hidden="true">▶</span><span><strong>视频 {{ supportVideo?.includes('mp4') ? 'MP4' : 'WebM' }}</strong><small>{{ supportVideo ? '导出完整场景动画' : '当前浏览器不支持录制' }}</small></span></DropdownMenuItem>
+            <DropdownMenuItem class="export-option" :disabled="busy || !supportVideo" :title="supportVideo || '浏览器不支持视频录制'" @select="output('video')"><span class="export-option-icon" aria-hidden="true">▶</span><span><strong>视频 {{ supportVideo?.includes('mp4') ? 'MP4' : 'WebM' }}</strong><small>{{ supportVideo ? '导出所选时间段' : '当前浏览器不支持录制' }}</small></span></DropdownMenuItem>
             <DropdownMenuItem class="export-option" :disabled="busy" @select="output('frames')"><span class="export-option-icon" aria-hidden="true">▦</span><span><strong>逐帧 ZIP</strong><small>下载 PNG 图片序列</small></span></DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -688,13 +735,13 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', keyboard); player.
         <div class="timeline-panel"><div class="timeline-header"><div><strong>时间线</strong><small>点选时间刻度定位；拖动菱形调整关键帧</small></div><div class="timeline-actions"><SelectField v-model="selectedTrack" label="动画属性" :options="animationOptions" /><Button variant="outline" size="sm" @click="addKeyframe">＋ 关键帧</Button></div></div>
           <div class="ruler"><span class="ruler-label">时间</span><div class="ruler-line" aria-label="时间刻度" @pointerdown="timelinePointerDown" @pointermove="timelinePointerMove"><span v-for="mark in 9" :key="mark">{{ ((mark - 1) * scene.duration / 8).toFixed(1) }}s</span><i class="timeline-playhead" :style="{ left: `${currentTime / scene.duration * 100}%` }"></i></div></div>
           <div class="track-list"><div v-for="track in scene.tracks" :key="`${track.nodeId}.${track.property}`" class="track-row"><div class="track-label"><Button variant="ghost" class="track-name" :title="scene.nodes.find(node => node.id === track.nodeId)?.name" @click="selectedId = track.nodeId">{{ scene.nodes.find(node => node.id === track.nodeId)?.name }}</Button><small>{{ track.property }}</small><Button variant="ghost" title="删除轨道" :aria-label="`删除 ${track.property} 轨道`" @click="deleteTrack(track)">×</Button></div><div class="track-line" @pointerdown="timelinePointerDown" @pointermove="timelinePointerMove"><i class="timeline-playhead" :style="{ left: `${currentTime / scene.duration * 100}%` }"></i><Button variant="ghost" v-for="(frame, index) in track.keyframes" :key="index" class="keyframe-marker" :class="{ active: selectedKeyframe?.nodeId === track.nodeId && selectedKeyframe.property === track.property && selectedKeyframe.time === frame.time, dragging: draggingKeyframe?.nodeId === track.nodeId && draggingKeyframe.property === track.property && draggingKeyframe.index === index }" :style="{ left: `${framePosition(track, index) / scene.duration * 100}%` }" :title="`${frame.time}s · ${frame.value}`" :aria-label="`${scene.nodes.find(node => node.id === track.nodeId)?.name} ${track.property} ${frame.time} 秒关键帧`" @click="selectKeyframe(track, frame.time)" @pointerdown="keyframePointerDown($event, track, index)" @pointermove="keyframePointerMove($event, track, index)" @pointerup="keyframePointerUp(track, index)" @pointercancel="draggingKeyframe = null">◆</Button></div></div><p v-if="!scene.tracks.length" class="empty-note">暂无关键帧。先选对象，定位时间，再点击“＋ 关键帧”。</p></div>
-          <div v-if="activeKeyframe" class="keyframe-editor"><strong>{{ activeKeyframe.node?.name }} · {{ activeKeyframe.track.property }}</strong><label>时间（秒）<Input type="number" min="0" :max="scene.duration" step="0.01" :value="activeKeyframe.frame.time" aria-label="关键帧时间" @change="moveKeyframe(activeKeyframe.track, activeKeyframe.index, Number(($event.target as HTMLInputElement).value)); ($event.target as HTMLInputElement).value = String(activeKeyframe?.frame.time ?? '')" /></label><label>值<Input :value="activeKeyframe.frame.value" aria-label="关键帧值" @change="editKeyframeValue(activeKeyframe.track, activeKeyframe.index, ($event.target as HTMLInputElement).value); ($event.target as HTMLInputElement).value = String(activeKeyframe?.frame.value ?? '')" /></label><label v-if="typeof activeKeyframe.frame.value === 'number'">至下一帧缓动<SelectField :model-value="activeKeyframe.frame.easing ?? 'linear'" label="关键帧缓动" :options="easingOptions" @update:model-value="editKeyframeEasing(activeKeyframe.track, activeKeyframe.index, $event as 'linear' | 'easeInOut' | 'step')" /></label><Button variant="ghost" class="delete-keyframe" @click="deleteKeyframe(activeKeyframe.track, activeKeyframe.index)">删除关键帧</Button></div>
+          <div v-if="activeKeyframe" class="keyframe-editor"><strong>{{ activeKeyframe.node?.name }} · {{ activeKeyframe.track.property }}</strong><label>时间（秒）<Input type="number" min="0" :max="scene.duration" step="0.01" :value="activeKeyframe.frame.time" aria-label="关键帧时间" @change="moveKeyframe(activeKeyframe.track, activeKeyframe.index, Number(($event.target as HTMLInputElement).value)); ($event.target as HTMLInputElement).value = String(activeKeyframe?.frame.time ?? '')" /></label><label v-if="typeof activeKeyframe.frame.value === 'boolean'">值<SelectField :model-value="String(activeKeyframe.frame.value)" label="关键帧值" :options="visibilityOptions" @update:model-value="editKeyframeValue(activeKeyframe.track, activeKeyframe.index, $event)" /></label><label v-else>值<Input :value="activeKeyframe.frame.value" aria-label="关键帧值" @change="editKeyframeValue(activeKeyframe.track, activeKeyframe.index, ($event.target as HTMLInputElement).value); ($event.target as HTMLInputElement).value = String(activeKeyframe?.frame.value ?? '')" /></label><label v-if="typeof activeKeyframe.frame.value === 'number' || ['fill', 'stroke'].includes(activeKeyframe.track.property)">至下一帧缓动<SelectField :model-value="activeKeyframe.frame.easing ?? 'linear'" label="关键帧缓动" :options="easingOptions" @update:model-value="editKeyframeEasing(activeKeyframe.track, activeKeyframe.index, $event as 'linear' | 'easeInOut' | 'step')" /></label><Button variant="ghost" class="delete-keyframe" @click="deleteKeyframe(activeKeyframe.track, activeKeyframe.index)">删除关键帧</Button></div>
         </div>
       </section>
 
       <aside v-show="activeRightPanel" id="right-panel" class="right-panel">
         <template v-if="activeRightPanel === 'project'">
-            <section class="project-settings"><div class="section-title">项目与场景设置</div><div class="settings-body"><label>项目名称<Input :value="project.name" @change="editProjectName" /></label><label>场景名称<Input :value="scene.name" @change="editScene('name', $event)" /></label><div class="field-row"><label>时长（秒）<Input type="number" min="0.1" step="0.1" :value="scene.duration" @change="editScene('duration', $event)" /></label><label>背景色<Input type="color" :value="project.canvas.background ?? '#0b1220'" @change="editCanvas('background', $event)" /></label></div><label>画布预置<SelectField :model-value="selectedCanvasPreset ? `${selectedCanvasPreset.width}x${selectedCanvasPreset.height}` : ''" label="画布预置" placeholder="自定义尺寸" :groups="canvasPresetGroups" @update:model-value="applyCanvasPreset" /></label><div class="field-row"><label>画布宽度<Input type="number" min="1" max="4096" :value="project.canvas.width" @change="editCanvas('width', $event)" /></label><label>画布高度<Input type="number" min="1" max="4096" :value="project.canvas.height" @change="editCanvas('height', $event)" /></label></div></div></section>
+            <section class="project-settings"><div class="section-title">项目与场景设置</div><div class="settings-body"><label>项目名称<Input :value="project.name" @change="editProjectName" /></label><label>场景名称<Input :value="scene.name" @change="editScene('name', $event)" /></label><div class="field-row"><label>时长（秒）<Input type="number" min="0.1" step="0.1" :value="scene.duration" @change="editScene('duration', $event)" /></label><label>背景色<Input type="color" :value="project.canvas.background ?? '#0b1220'" @change="editCanvas('background', $event)" /></label></div><label>画布预置<SelectField :model-value="selectedCanvasPreset ? `${selectedCanvasPreset.width}x${selectedCanvasPreset.height}` : ''" label="画布预置" placeholder="自定义尺寸" :groups="canvasPresetGroups" @update:model-value="applyCanvasPreset" /></label><div class="field-row"><label>画布宽度<Input type="number" min="1" max="4096" :value="project.canvas.width" @change="editCanvas('width', $event)" /></label><label>画布高度<Input type="number" min="1" max="4096" :value="project.canvas.height" @change="editCanvas('height', $event)" /></label></div><div v-if="project.extensions" class="extension-view"><strong>扩展数据 · 只读</strong><p>编辑器暂不支持修改以下扩展数据；保存项目时会保留。</p><pre tabindex="0">{{ JSON.stringify(project.extensions, null, 2) }}</pre></div></div></section>
         </template>
         <template v-if="activeRightPanel === 'parameters'">
             <div class="params-panel"><div class="section-title"><span>场景参数</span><Button variant="ghost" title="新增参数" @click="addParameter">＋</Button></div><div v-for="param in scene.params" :key="param.id" class="param-item"><div class="param-head"><strong>{{ param.label }}</strong><span>{{ (paramValues[param.id] ?? param.value).toFixed(2) }} {{ param.unit }}</span></div><Slider :model-value="paramValues[param.id] ?? param.value" :min="param.min" :max="param.max" :step="param.step" :label="param.label" @update:model-value="changeParam(param.id, $event)" /><CollapsiblePanel title="参数定义"><label>名称<Input :value="param.label" @change="editParam(param.id, 'label', ($event.target as HTMLInputElement).value)" /></label><div class="field-row"><label>默认值<Input type="number" :value="param.value" @change="editParam(param.id, 'value', ($event.target as HTMLInputElement).value)" /></label><label>单位<Input :value="param.unit" @change="editParam(param.id, 'unit', ($event.target as HTMLInputElement).value)" /></label></div><div class="field-row"><label>最小<Input type="number" :value="param.min" @change="editParam(param.id, 'min', ($event.target as HTMLInputElement).value)" /></label><label>最大<Input type="number" :value="param.max" @change="editParam(param.id, 'max', ($event.target as HTMLInputElement).value)" /></label></div><label>步长<Input type="number" min="0.001" step="0.001" :value="param.step" @change="editParam(param.id, 'step', ($event.target as HTMLInputElement).value)" /></label></CollapsiblePanel></div><p v-if="!scene.params.length" class="empty-note">添加参数，让作品可交互。</p></div>
@@ -703,6 +750,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', keyboard); player.
         <div v-if="selected" class="inspector"><div class="inspector-name"><span class="template-icon teal">◇</span><div><strong>{{ displayNodeName(selected) }}</strong><small>{{ nodeNames[selected.type] }}</small></div><Button variant="ghost" title="删除对象" @click="removeSelected">×</Button></div>
           <label>名称<Input :value="primaryName" :disabled="textDriven" @change="editPrimaryName" /><small v-if="selected.type === 'text' || selected.type === 'formula'" class="field-help">{{ textDriven ? '画布文字由表达式或关键帧生成，请修改驱动来源' : '文字对象的名称就是画布显示内容' }}</small></label>
           <label v-if="selected.type !== 'group'">所属分组<SelectField :model-value="selected.parentId ?? ''" label="所属分组" :options="groupOptions" @update:model-value="editNode('parentId', $event)" /></label>
+          <label v-if="selected.type !== 'group'">可见性<SelectField :model-value="String(selected.visible !== false)" label="对象可见性" :options="visibilityOptions" :disabled="scene.tracks.some(track => track.nodeId === selectedId && track.property === 'visible')" @update:model-value="editNode('visible', $event === 'true')" /><small v-if="scene.tracks.some(track => track.nodeId === selectedId && track.property === 'visible')" class="driven-note">由时间线控制</small></label>
           <div class="field-row"><label>X 位置<Input type="number" :value="evaluatedSelected?.x ?? selected.x" :disabled="!!driverFor('x')" @change="editNodeNumber('x', $event)" /><small v-if="driverFor('x')" class="driven-note">由{{ driverFor('x') }}控制，修改下方绑定或时间线</small></label><label>Y 位置<Input type="number" :value="evaluatedSelected?.y ?? selected.y" :disabled="!!driverFor('y')" @change="editNodeNumber('y', $event)" /><small v-if="driverFor('y')" class="driven-note">由{{ driverFor('y') }}控制，修改下方绑定或时间线</small></label></div>
           <div v-if="['rect','axes','image'].includes(selected.type)" class="field-row"><label>宽度<Input type="number" min="1" :value="selected.width" @change="editNodeNumber('width', $event)" /></label><label>高度<Input type="number" min="1" :value="selected.height" @change="editNodeNumber('height', $event)" /></label></div>
           <div v-if="['circle','point'].includes(selected.type)" class="field-row"><label>半径<Input type="number" min="1" :value="selected.radius" @change="editNodeNumber('radius', $event)" /></label><label>透明度<Input type="number" min="0" max="1" step="0.1" :value="selected.opacity ?? 1" @change="editNodeNumber('opacity', $event)" /></label></div>
@@ -710,6 +758,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', keyboard); player.
           <div v-if="['text','formula'].includes(selected.type)" class="field-row"><label>字号<Input type="number" min="8" :value="selected.fontSize ?? 24" @change="editNodeNumber('fontSize', $event)" /></label><label>透明度<Input type="number" min="0" max="1" step="0.1" :value="selected.opacity ?? 1" @change="editNodeNumber('opacity', $event)" /></label></div>
           <label v-if="selected.type === 'plot'">函数 y = f(x)<Input :value="selected.expression" placeholder="sin(x)" @change="editNodeString('expression', $event)" /></label>
           <template v-if="selected.type === 'axes'"><div class="field-row"><label>X 最小<Input type="number" :value="selected.xRange?.[0]" @change="editAxisRange('xRange', 0, $event)" /></label><label>X 最大<Input type="number" :value="selected.xRange?.[1]" @change="editAxisRange('xRange', 1, $event)" /></label></div><div class="field-row"><label>Y 最小<Input type="number" :value="selected.yRange?.[0]" @change="editAxisRange('yRange', 0, $event)" /></label><label>Y 最大<Input type="number" :value="selected.yRange?.[1]" @change="editAxisRange('yRange', 1, $event)" /></label></div></template>
+          <div v-if="selected.type === 'path' || selected.type === 'polygon'" class="point-editor"><div class="point-editor-heading"><strong>顶点</strong><Button variant="outline" size="sm" @click="addPoint">添加顶点</Button></div><div v-for="(point, index) in selected.points" :key="index" class="point-editor-row"><span>{{ index + 1 }}</span><label>X<Input type="number" :value="point[0]" :aria-label="`顶点 ${index + 1} X`" @change="editPoint(index, 0, $event)" /></label><label>Y<Input type="number" :value="point[1]" :aria-label="`顶点 ${index + 1} Y`" @change="editPoint(index, 1, $event)" /></label><Button variant="ghost" size="icon" :disabled="(selected.points?.length ?? 0) <= (selected.type === 'polygon' ? 3 : 2)" :aria-label="`删除顶点 ${index + 1}`" @click="removePoint(index)">×</Button></div><small>坐标相对于对象的位置</small></div>
           <label v-if="['point','line','arrow','plot'].includes(selected.type)">关联坐标系<SelectField :model-value="selected.axesId ?? ''" label="关联坐标系" :options="axesOptions" @update:model-value="editNode('axesId', $event)" /></label>
           <div class="field-row"><label>旋转（弧度）<Input type="number" step="0.1" :value="selected.rotation ?? 0" @change="editNodeNumber('rotation', $event)" /></label><label>缩放<Input type="number" min="0.1" step="0.1" :value="selected.scale ?? 1" @change="editNodeNumber('scale', $event)" /></label></div>
           <div class="field-row"><label>填充色<Input type="color" :value="selected.fill ?? '#ffffff'" @change="editNodeString('fill', $event)" /></label><label>描边色<Input type="color" :value="selected.stroke ?? '#ffffff'" @change="editNodeString('stroke', $event)" /></label></div>
