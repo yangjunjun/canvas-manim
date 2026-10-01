@@ -25,6 +25,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .export-option-icon { display: grid; place-items: center; flex: none; width: 29px; height: 29px; border: 1px solid var(--border); border-radius: var(--radius); color: var(--muted-foreground); background: var(--card); font-size: 15px; }
 .export-option strong { display: block; font-size: 12px; line-height: 1.4; }
 .export-option small { display: block; margin-top: 2px; color: var(--muted-foreground); font-size: 10px; line-height: 1.4; }
+.share-dropdown-panel { width: 300px !important; padding: 12px; border: 1px solid var(--border); background: var(--popover); box-shadow: 0 12px 32px #0002; }
+.share-content { display: grid; gap: 8px; min-width: 0; }
+.share-content strong { color: var(--popover-foreground); font-size: 12px; }
+.share-content p { margin: 0; color: var(--muted-foreground); font-size: 10px; line-height: 1.5; }
+.share-content input { min-width: 0; width: 100%; font-size: 11px; }
+.share-copy { justify-self: end; }
 .export-range { padding: 9px 10px 11px; border-bottom: 1px solid var(--border); }
 .export-range strong, .extension-view strong, .point-editor strong { font-size: 11px; color: var(--foreground); }
 .export-range .field-row { margin: 7px 0; }
@@ -35,6 +41,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .extension-view p { margin: 5px 0 8px; }
 .extension-view pre { max-height: 220px; overflow: auto; padding: 9px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--secondary); color: var(--foreground); font-size: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .point-editor { display: grid; gap: 8px; min-width: 0; }
+.combo-editor { display: grid; gap: 8px; min-width: 0; padding-top: 10px; border-top: 1px solid var(--border); }
 .point-editor-heading, .point-editor-row { display: flex; align-items: center; gap: 6px; }
 .point-editor-heading { justify-content: space-between; }
 .point-editor-row > span { width: 16px; color: var(--muted-foreground); font-size: 10px; }

@@ -5,7 +5,7 @@ import type { Project } from './types.ts'
 const MAX_FILE_BYTES = 50 * 1024 * 1024
 const MAX_CONTENT_BYTES = 100 * 1024 * 1024
 
-function assertSerializable(value: unknown, path = 'project', ancestors = new WeakSet<object>()): void {
+export function assertSerializable(value: unknown, path = 'project', ancestors = new WeakSet<object>()): void {
   if (value === undefined || typeof value === 'function' || typeof value === 'symbol' || typeof value === 'bigint') throw new Error(`${path} 包含无法序列化的运行时数据；请移除函数、回调或非 JSON 值后保存`)
   if (typeof value === 'number' && !Number.isFinite(value)) throw new Error(`${path} 包含非有限数值，无法保存`)
   if (!value || typeof value !== 'object') return

@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Player } from './core/player.ts'
-import { evaluateScene, validateProject } from './core/engine.ts'
+import { evaluateScene, layoutAnchorPosition, validateProject } from './core/engine.ts'
+import { applyAnimationCombo, type AnimationComboKind } from './core/animation-combos.ts'
 import { hitTestScene, selectionBounds } from './core/hit-test.ts'
 import { projectFromBlob, projectToBlob } from './core/project-file.ts'
+import { createShareUrl, readShareUrl } from './core/share.ts'
 import { createBlankProject, templates } from './core/templates.ts'
 import { download, exportFrames, exportPng, exportVideo, resolveExportRange, supportedVideoType } from './core/export.ts'
-import { ArrowUpRight, ChartNoAxesCombined, ChevronDown, Circle, Crosshair, Dot, Download, Folder, Image, Layers3, ListVideo, Minus, Pause, PenLine, Pentagon, Play, Plus, RectangleHorizontal, Redo2, Settings2, Sigma, SkipForward, SlidersHorizontal, SlidersVertical, Sparkles, Type, Undo2 } from '@lucide/vue'
+import { ArrowUpRight, ChartNoAxesCombined, ChevronDown, Circle, Copy, Crosshair, Dot, Download, Folder, Image, Layers3, ListVideo, Minus, Pause, PenLine, Pentagon, Play, Plus, RectangleHorizontal, Redo2, Settings2, Share2, Sigma, SkipForward, SlidersHorizontal, SlidersVertical, Sparkles, Type, Undo2 } from '@lucide/vue'
 import { Button } from './components/ui/button'
 import { CollapsiblePanel } from './components/ui/collapsible'
 import { Input } from './components/ui/input'
@@ -35,6 +37,8 @@ const currentTime = ref(0)
 const playing = ref(false)
 const busy = ref(false)
 const exportOpen = ref(false)
+const shareOpen = ref(false)
+const shareUrl = ref('')
 const message = ref('选择模板或从空白场景开始。')
 const canvasPresets: { group: string; sizes: { label: string; width: number; height: number }[] }[] = [
   { group: '手机视频', sizes: [
@@ -61,6 +65,19 @@ const animationOptions = [
   { value: 'text', label: '文字' }, { value: 'visible', label: '显示 / 隐藏' },
 ]
 const visibilityOptions = [{ value: 'true', label: '显示' }, { value: 'false', label: '隐藏' }]
+const orientationOptions = [{ value: 'false', label: '保持原角度' }, { value: 'true', label: '沿切线旋转' }]
+const trailOptions = [{ value: 'false', label: '关闭' }, { value: 'true', label: '开启' }]
+const comboOptions = [{ value: 'fadeSlideIn', label: '淡入并滑入' }, { value: 'pulse', label: '脉冲缩放' }, { value: 'fadeSlideOut', label: '淡出并滑出' }]
+const comboKind = ref<AnimationComboKind>('fadeSlideIn')
+const comboStart = ref(0)
+const comboDuration = ref(2)
+const comboAmount = ref(60)
+const layoutOptions = [
+  { value: '', label: '自由位置' },
+  { value: 'left:top', label: '左上' }, { value: 'center:top', label: '上中' }, { value: 'right:top', label: '右上' },
+  { value: 'left:center', label: '左中' }, { value: 'center:center', label: '画布中心' }, { value: 'right:center', label: '右中' },
+  { value: 'left:bottom', label: '左下' }, { value: 'center:bottom', label: '下中' }, { value: 'right:bottom', label: '右下' },
+]
 const easingOptions = [
   { value: 'linear', label: '线性' }, { value: 'easeInOut', label: '缓入缓出' }, { value: 'step', label: '阶跃' },
 ]
@@ -82,9 +99,11 @@ const activeKeyframe = computed(() => {
 const selectedCanvasPreset = computed(() => canvasPresets.flatMap(group => group.sizes)
   .find(size => size.width === project.value.canvas.width && size.height === project.value.canvas.height))
 const selected = computed(() => scene.value.nodes.find(node => node.id === selectedId.value) ?? null)
+const pathOptions = computed(() => [{ value: '', label: '不跟随' }, ...scene.value.nodes.filter(node => node.type === 'path' && node.id !== selectedId.value).map(node => ({ value: node.id, label: node.name }))])
+const matchOptions = computed(() => [{ value: '', label: '不变形' }, ...scene.value.nodes.filter(node => selected.value && !['group', 'axes', 'plot'].includes(node.type) && node.id !== selected.value.id && node.type === selected.value.type && !node.matchTransform && node.parentId === selected.value.parentId && node.axesId === selected.value.axesId && (node.type !== 'path' && node.type !== 'polygon' || node.points?.length === selected.value.points?.length) && !scene.value.nodes.some(item => item.matchTransform?.targetId === node.id && item.id !== selected.value?.id)).map(node => ({ value: node.id, label: node.name }))])
 const evaluatedSelected = computed(() => {
   if (!selectedId.value) return null
-  try { return evaluateScene(scene.value, currentTime.value, paramValues.value).nodes.find(node => node.id === selectedId.value) ?? null }
+  try { return evaluateScene(scene.value, currentTime.value, paramValues.value, { canvas: project.value.canvas }).nodes.find(node => node.id === selectedId.value) ?? null }
   catch { return null }
 })
 const textDriven = computed(() => selected.value?.type === 'text' || selected.value?.type === 'formula'
@@ -97,7 +116,7 @@ const primaryName = computed(() => {
 const selectionBox = computed(() => {
   if (!selectedId.value) return null
   try {
-    return selectionBounds(evaluateScene(scene.value, currentTime.value, paramValues.value), selectedId.value, (content, size) => {
+    return selectionBounds(evaluateScene(scene.value, currentTime.value, paramValues.value, { canvas: project.value.canvas }), selectedId.value, (content, size) => {
       const context = canvas.value?.getContext('2d')
       if (!context) return { width: content.length * size, ascent: size, descent: size * 0.25 }
       context.save()
@@ -174,8 +193,10 @@ function editPrimaryName(event: Event): void {
   })
 }
 
-function driverFor(property: 'x' | 'y'): '表达式' | '关键帧' | null {
+function driverFor(property: 'x' | 'y'): '布局约束' | '路径跟随' | '表达式' | '关键帧' | null {
   if (!selected.value) return null
+  if (selected.value.layout) return '布局约束'
+  if (selected.value.followPath) return '路径跟随'
   if (selected.value.bindings?.[property]) return '表达式'
   if (scene.value.tracks.some(track => track.nodeId === selectedId.value && track.property === property)) return '关键帧'
   return null
@@ -314,6 +335,7 @@ function removeSelected(): void {
     const target = draft.scenes.find(item => item.id === sceneId.value)!
     target.nodes = target.nodes.filter(node => node.id !== id)
     target.tracks = target.tracks.filter(track => track.nodeId !== id)
+    for (const node of target.nodes) if (node.matchTransform?.targetId === id) delete node.matchTransform
   })
   selectedId.value = null
   selectedKeyframe.value = null
@@ -330,6 +352,119 @@ function editNode(field: keyof SceneNode, value: string | number | boolean): voi
 
 function editNodeNumber(field: keyof SceneNode, event: Event): void { editNode(field, Number((event.target as HTMLInputElement).value)) }
 function editNodeString(field: keyof SceneNode, event: Event): void { editNode(field, (event.target as HTMLInputElement).value) }
+
+function setLayoutAnchor(value: string): void {
+  if (!selectedId.value) return
+  const id = selectedId.value
+  commit(draft => {
+    const node = draft.scenes.find(item => item.id === sceneId.value)!.nodes.find(item => item.id === id)!
+    const canvas = draft.canvas
+    const [oldAnchorX, oldAnchorY] = node.layout ? layoutAnchorPosition(node.layout, canvas) : [0, 0]
+    const positionX = node.layout ? oldAnchorX + node.layout.offsetX : node.x
+    const positionY = node.layout ? oldAnchorY + node.layout.offsetY : node.y
+    if (!value) { node.x = positionX; node.y = positionY; delete node.layout; return }
+    const [anchorX, anchorY] = value.split(':') as [NonNullable<SceneNode['layout']>['anchorX'], NonNullable<SceneNode['layout']>['anchorY']]
+    const layout: NonNullable<SceneNode['layout']> = { anchorX, anchorY, offsetX: 0, offsetY: 0 }
+    const [nextX, nextY] = layoutAnchorPosition(layout, canvas)
+    layout.offsetX = positionX - nextX; layout.offsetY = positionY - nextY
+    node.layout = layout
+  })
+}
+
+function editLayoutOffset(field: 'offsetX' | 'offsetY', event: Event): void {
+  if (!selectedId.value) return
+  const id = selectedId.value, value = Number((event.target as HTMLInputElement).value)
+  commit(draft => { draft.scenes.find(item => item.id === sceneId.value)!.nodes.find(item => item.id === id)!.layout![field] = value })
+}
+
+function setFollowPath(pathId: string): void {
+  if (!selectedId.value) return
+  const id = selectedId.value
+  commit(draft => {
+    const node = draft.scenes.find(item => item.id === sceneId.value)!.nodes.find(item => item.id === id)!
+    if (!pathId) { delete node.followPath; return }
+    node.followPath = { pathId, progress: 0, orient: false, offsetX: 0, offsetY: 0 }
+  })
+}
+
+function editFollowNumber(field: 'progress' | 'offsetX' | 'offsetY', event: Event): void {
+  if (!selectedId.value) return
+  const id = selectedId.value, value = Number((event.target as HTMLInputElement).value)
+  commit(draft => { draft.scenes.find(item => item.id === sceneId.value)!.nodes.find(item => item.id === id)!.followPath![field] = value })
+}
+
+function editFollowExpression(event: Event): void {
+  if (!selectedId.value) return
+  const id = selectedId.value, expression = (event.target as HTMLInputElement).value.trim()
+  commit(draft => {
+    const follow = draft.scenes.find(item => item.id === sceneId.value)!.nodes.find(item => item.id === id)!.followPath!
+    if (expression) follow.progressExpression = expression
+    else delete follow.progressExpression
+  })
+}
+
+function editFollowOrient(value: string): void {
+  if (!selectedId.value) return
+  const id = selectedId.value
+  commit(draft => { draft.scenes.find(item => item.id === sceneId.value)!.nodes.find(item => item.id === id)!.followPath!.orient = value === 'true' })
+}
+
+function setTrail(value: string): void {
+  if (!selectedId.value) return
+  const id = selectedId.value
+  commit(draft => {
+    const node = draft.scenes.find(item => item.id === sceneId.value)!.nodes.find(item => item.id === id)!
+    if (value === 'true') node.trail = { duration: 2, samples: 8, radius: 5, opacity: 0.45, color: /^#[0-9a-f]{6}$/i.test(node.fill ?? '') ? node.fill : '#5eead4' }
+    else delete node.trail
+  })
+}
+
+function editTrailNumber(field: 'duration' | 'samples' | 'radius' | 'opacity', event: Event): void {
+  if (!selectedId.value) return
+  const id = selectedId.value, value = Number((event.target as HTMLInputElement).value)
+  commit(draft => { draft.scenes.find(item => item.id === sceneId.value)!.nodes.find(item => item.id === id)!.trail![field] = value })
+}
+
+function editTrailColor(event: Event): void {
+  if (!selectedId.value) return
+  const id = selectedId.value, value = (event.target as HTMLInputElement).value
+  commit(draft => { draft.scenes.find(item => item.id === sceneId.value)!.nodes.find(item => item.id === id)!.trail!.color = value })
+}
+
+function setMatchTarget(targetId: string): void {
+  if (!selectedId.value) return
+  const id = selectedId.value
+  commit(draft => {
+    const node = draft.scenes.find(item => item.id === sceneId.value)!.nodes.find(item => item.id === id)!
+    if (!targetId) { delete node.matchTransform; return }
+    node.matchTransform = { targetId, start: 0, end: Math.min(2, draft.scenes.find(item => item.id === sceneId.value)!.duration), easing: 'easeInOut' }
+  })
+}
+
+function editMatchNumber(field: 'start' | 'end', event: Event): void {
+  if (!selectedId.value) return
+  const id = selectedId.value, value = Number((event.target as HTMLInputElement).value)
+  commit(draft => { draft.scenes.find(item => item.id === sceneId.value)!.nodes.find(item => item.id === id)!.matchTransform![field] = value })
+}
+
+function editMatchEasing(value: string): void {
+  if (!selectedId.value) return
+  const id = selectedId.value
+  commit(draft => { draft.scenes.find(item => item.id === sceneId.value)!.nodes.find(item => item.id === id)!.matchTransform!.easing = value as 'linear' | 'easeInOut' })
+}
+
+function applySelectedCombo(): void {
+  if (!selectedId.value) return
+  const id = selectedId.value
+  commit(draft => applyAnimationCombo(draft.scenes.find(item => item.id === sceneId.value)!, id, {
+    kind: comboKind.value, start: comboStart.value, duration: comboDuration.value, amount: comboAmount.value,
+  }))
+}
+
+function selectComboKind(value: string): void {
+  comboKind.value = value as AnimationComboKind
+  comboAmount.value = value === 'pulse' ? 1.25 : 60
+}
 
 function editProjectName(event: Event): void { commit(draft => { draft.name = (event.target as HTMLInputElement).value.trim() || '未命名作品' }) }
 function editCanvas(field: 'width' | 'height' | 'background', event: Event): void {
@@ -381,6 +516,7 @@ function removePoint(index: number): void {
 
 function editBinding(field: string, event: Event): void {
   if (!selectedId.value) return
+  if ((selected.value?.layout || selected.value?.followPath) && (field === 'x' || field === 'y') && (event.target as HTMLInputElement).value.trim()) { message.value = '布局或路径跟随已控制位置；请先解除对应设置'; return }
   const expression = (event.target as HTMLInputElement).value.trim()
   const id = selectedId.value
   commit(draft => {
@@ -415,9 +551,10 @@ function changeParam(id: string, value: number): void {
 function addKeyframe(): void {
   if (!selectedId.value) { message.value = '先选择一个对象'; return }
   const id = selectedId.value, property = selectedTrack.value as keyof SceneNode
+  if ((property === 'x' || property === 'y') && (selected.value?.layout || selected.value?.followPath)) { message.value = '布局或路径跟随已控制位置；请先解除对应设置'; return }
   let value: unknown
   try {
-    const node = evaluateScene(scene.value, currentTime.value, paramValues.value).nodes.find(node => node.id === id)!
+    const node = evaluateScene(scene.value, currentTime.value, paramValues.value, { canvas: project.value.canvas }).nodes.find(node => node.id === id)!
     value = property === 'visible' ? node.visible !== false : (node as unknown as Record<string, unknown>)[property]
   }
   catch (error) { announce(error); return }
@@ -545,6 +682,36 @@ async function save(): Promise<void> {
   catch (error) { announce(error) }
 }
 
+function updateShareOpen(open: boolean): void {
+  if (!open) { shareOpen.value = false; return }
+  try {
+    shareUrl.value = createShareUrl({ project: project.value, sceneId: sceneId.value, params: paramValues.value, time: currentTime.value }, window.location.href)
+    shareOpen.value = true
+  } catch (error) { shareOpen.value = false; announce(error) }
+}
+
+async function copyShareLink(): Promise<void> {
+  try { await navigator.clipboard.writeText(shareUrl.value); message.value = '分享链接已复制' }
+  catch { message.value = '复制失败，请选中链接手动复制' }
+}
+
+function loadSharedState(): void {
+  try {
+    const shared = readShareUrl(window.location.href)
+    if (!shared) return
+    project.value = shared.project
+    sceneId.value = shared.sceneId
+    selectedId.value = null; selectedKeyframe.value = null
+    currentTime.value = shared.time; paramValues.value = shared.params
+    exportStart.value = 0; exportEnd.value = scene.value.duration
+    undoStack.length = 0; redoStack.length = 0
+    player.value?.setProject(shared.project, shared.sceneId)
+    player.value?.setParams(shared.params)
+    player.value?.seek(shared.time)
+    message.value = `已从分享链接恢复「${shared.project.name}」`
+  } catch (error) { announce(error) }
+}
+
 async function openFile(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
@@ -608,13 +775,13 @@ let drag: { id: string; startX: number; startY: number; nodeX: number; nodeY: nu
 function canvasPointerDown(event: PointerEvent): void {
   const [x, y] = canvasPoint(event)
   let hit: SceneNode | null = null
-  try { hit = hitTestScene(evaluateScene(scene.value, currentTime.value, paramValues.value), x, y) }
+  try { hit = hitTestScene(evaluateScene(scene.value, currentTime.value, paramValues.value, { canvas: project.value.canvas }), x, y) }
   catch (error) { announce(error); return }
   selectedId.value = hit?.id ?? null
   if (!hit) return
-  const driven = hit.bindings?.x || hit.bindings?.y || scene.value.tracks.some(track => track.nodeId === hit!.id && (track.property === 'x' || track.property === 'y'))
+  const driven = hit.layout || hit.followPath || hit.bindings?.x || hit.bindings?.y || scene.value.tracks.some(track => track.nodeId === hit!.id && (track.property === 'x' || track.property === 'y'))
   if (hit.axesId || hit.type === 'plot' || driven) {
-    message.value = driven ? '已选中对象。位置由表达式或关键帧控制，请在右侧或时间线修改' : '已选中对象。此对象使用坐标系，请在右侧修改坐标'
+    message.value = hit.layout ? '已选中对象。位置由布局约束控制，请在右侧调整偏移' : hit.followPath ? '已选中对象。位置由路径跟随控制，请在右侧调整进度或偏移' : driven ? '已选中对象。位置由表达式或关键帧控制，请在右侧或时间线修改' : '已选中对象。此对象使用坐标系，请在右侧修改坐标'
     return
   }
   drag = { id: hit.id, startX: x, startY: y, nodeX: hit.x, nodeY: hit.y, before: cloneCurrent() }
@@ -659,9 +826,11 @@ onMounted(async () => {
     player.value.onChange = (time, isPlaying) => { currentTime.value = time; playing.value = isPlaying }
     player.value.onError = announce
   }
+  loadSharedState()
+  window.addEventListener('hashchange', loadSharedState)
   window.addEventListener('keydown', keyboard)
 })
-onBeforeUnmount(() => { window.removeEventListener('keydown', keyboard); player.value?.destroy() })
+onBeforeUnmount(() => { window.removeEventListener('keydown', keyboard); window.removeEventListener('hashchange', loadSharedState); player.value?.destroy() })
 </script>
 
 <template>
@@ -678,6 +847,10 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', keyboard); player.
         <Button variant="outline" size="lg" @click="newProject('blank')">新建</Button>
         <Button variant="outline" size="lg" @click="fileInput?.click()">打开</Button>
         <Button variant="outline" size="lg" @click="save">保存项目</Button>
+        <DropdownMenu :open="shareOpen" :modal="false" @update:open="updateShareOpen">
+          <DropdownMenuTrigger as-child><Button variant="outline" size="lg"><Share2 aria-hidden="true" />分享</Button></DropdownMenuTrigger>
+          <DropdownMenuContent align="end" :side-offset="8" class="share-dropdown-panel"><div class="share-content"><strong>分享当前作品</strong><p>链接包含项目、场景、参数和当前时刻。修改后请重新生成链接。</p><Input :value="shareUrl" readonly aria-label="分享链接" @focus="($event.target as HTMLInputElement).select()" /><Button class="share-copy" @click="copyShareLink"><Copy aria-hidden="true" />复制链接</Button></div></DropdownMenuContent>
+        </DropdownMenu>
         <DropdownMenu v-model:open="exportOpen" :modal="false">
           <DropdownMenuTrigger as-child><Button size="lg" class="export-trigger" :disabled="busy"><Download aria-hidden="true" />导出作品<ChevronDown aria-hidden="true" /></Button></DropdownMenuTrigger>
           <DropdownMenuContent id="export-dropdown-panel" align="end" :side-offset="8" class="export-dropdown-panel">
@@ -751,7 +924,16 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', keyboard); player.
           <label>名称<Input :value="primaryName" :disabled="textDriven" @change="editPrimaryName" /><small v-if="selected.type === 'text' || selected.type === 'formula'" class="field-help">{{ textDriven ? '画布文字由表达式或关键帧生成，请修改驱动来源' : '文字对象的名称就是画布显示内容' }}</small></label>
           <label v-if="selected.type !== 'group'">所属分组<SelectField :model-value="selected.parentId ?? ''" label="所属分组" :options="groupOptions" @update:model-value="editNode('parentId', $event)" /></label>
           <label v-if="selected.type !== 'group'">可见性<SelectField :model-value="String(selected.visible !== false)" label="对象可见性" :options="visibilityOptions" :disabled="scene.tracks.some(track => track.nodeId === selectedId && track.property === 'visible')" @update:model-value="editNode('visible', $event === 'true')" /><small v-if="scene.tracks.some(track => track.nodeId === selectedId && track.property === 'visible')" class="driven-note">由时间线控制</small></label>
-          <div class="field-row"><label>X 位置<Input type="number" :value="evaluatedSelected?.x ?? selected.x" :disabled="!!driverFor('x')" @change="editNodeNumber('x', $event)" /><small v-if="driverFor('x')" class="driven-note">由{{ driverFor('x') }}控制，修改下方绑定或时间线</small></label><label>Y 位置<Input type="number" :value="evaluatedSelected?.y ?? selected.y" :disabled="!!driverFor('y')" @change="editNodeNumber('y', $event)" /><small v-if="driverFor('y')" class="driven-note">由{{ driverFor('y') }}控制，修改下方绑定或时间线</small></label></div>
+          <label>布局锚点<SelectField :model-value="selected.layout ? `${selected.layout.anchorX}:${selected.layout.anchorY}` : ''" label="布局锚点" :options="layoutOptions" @update:model-value="setLayoutAnchor" /><small class="field-help">将对象原点固定在画布对应位置；调整画布尺寸时保持相对位置</small></label>
+          <div v-if="selected.layout" class="field-row"><label>水平偏移<Input type="number" :value="selected.layout.offsetX" @change="editLayoutOffset('offsetX', $event)" /></label><label>垂直偏移<Input type="number" :value="selected.layout.offsetY" @change="editLayoutOffset('offsetY', $event)" /></label></div>
+          <label v-if="selected.type !== 'path'">跟随路径<SelectField :model-value="selected.followPath?.pathId ?? ''" label="跟随路径" :options="pathOptions" @update:model-value="setFollowPath" /><small class="field-help">沿路径的实际长度移动；可用 t 和参数控制进度</small></label>
+          <template v-if="selected.followPath"><div class="field-row"><label>路径进度<Input type="number" min="0" max="1" step="0.01" :value="selected.followPath.progress" :disabled="!!selected.followPath.progressExpression" @change="editFollowNumber('progress', $event)" /></label><label>沿路径旋转<SelectField :model-value="String(selected.followPath.orient === true)" label="沿路径旋转" :options="orientationOptions" @update:model-value="editFollowOrient" /></label></div><label>进度表达式<Input :value="selected.followPath.progressExpression ?? ''" placeholder="例如 t/8" @change="editFollowExpression" /><small class="field-help">结果限制在 0–1；填写后覆盖静态进度</small></label><div class="field-row"><label>跟随水平偏移<Input type="number" :value="selected.followPath.offsetX" @change="editFollowNumber('offsetX', $event)" /></label><label>跟随垂直偏移<Input type="number" :value="selected.followPath.offsetY" @change="editFollowNumber('offsetY', $event)" /></label></div></template>
+          <label>轨迹残影<SelectField :model-value="String(!!selected.trail)" label="轨迹残影" :options="trailOptions" @update:model-value="setTrail" /><small class="field-help">由历史时刻重新求值，回拖与导出保持一致</small></label>
+          <template v-if="selected.trail"><div class="field-row"><label>残影时长（秒）<Input type="number" min="0.1" max="30" step="0.1" :value="selected.trail.duration" @change="editTrailNumber('duration', $event)" /></label><label>残影采样数<Input type="number" min="2" max="24" step="1" :value="selected.trail.samples" @change="editTrailNumber('samples', $event)" /></label></div><div class="field-row"><label>残影点半径<Input type="number" min="1" max="50" step="1" :value="selected.trail.radius" @change="editTrailNumber('radius', $event)" /></label><label>残影透明度<Input type="number" min="0.01" max="1" step="0.05" :value="selected.trail.opacity" @change="editTrailNumber('opacity', $event)" /></label></div><label>残影颜色<Input type="color" :value="selected.trail.color ?? '#5eead4'" @change="editTrailColor" /></label></template>
+          <label v-if="!['group', 'axes', 'plot'].includes(selected.type)">匹配对象变形<SelectField :model-value="selected.matchTransform?.targetId ?? ''" label="匹配对象变形" :options="matchOptions" @update:model-value="setMatchTarget" /><small class="field-help">同类对象从当前形态过渡到目标；目标在完成前隐藏</small></label>
+          <template v-if="selected.matchTransform"><div class="field-row"><label>变形开始（秒）<Input type="number" min="0" :max="scene.duration" step="0.1" :value="selected.matchTransform.start" @change="editMatchNumber('start', $event)" /></label><label>变形结束（秒）<Input type="number" min="0" :max="scene.duration" step="0.1" :value="selected.matchTransform.end" @change="editMatchNumber('end', $event)" /></label></div><label>变形缓动<SelectField :model-value="selected.matchTransform.easing" label="变形缓动" :options="easingOptions.filter(option => option.value !== 'step')" @update:model-value="editMatchEasing" /></label></template>
+          <div class="combo-editor"><label>动画组合<SelectField :model-value="comboKind" label="动画组合" :options="comboOptions" @update:model-value="selectComboKind" /></label><div class="field-row"><label>组合开始（秒）<Input v-model.number="comboStart" type="number" min="0" :max="scene.duration" step="0.1" /></label><label>组合时长（秒）<Input v-model.number="comboDuration" type="number" min="0.1" :max="scene.duration" step="0.1" /></label></div><label>{{ comboKind === 'pulse' ? '最大缩放倍数' : '滑动距离（像素）' }}<Input v-model.number="comboAmount" type="number" :min="comboKind === 'pulse' ? 1 : 1" :max="comboKind === 'pulse' ? 4 : 1000" :step="comboKind === 'pulse' ? 0.05 : 1" /></label><Button variant="outline" size="sm" @click="applySelectedCombo">应用动画组合</Button><small class="field-help">一次生成多条关键帧轨道；已有同属性动画时会提示冲突</small></div>
+          <div class="field-row"><label>X 位置<Input type="number" :value="evaluatedSelected?.x ?? selected.x" :disabled="!!driverFor('x')" @change="editNodeNumber('x', $event)" /><small v-if="driverFor('x')" class="driven-note">由{{ driverFor('x') }}控制，请修改对应设置</small></label><label>Y 位置<Input type="number" :value="evaluatedSelected?.y ?? selected.y" :disabled="!!driverFor('y')" @change="editNodeNumber('y', $event)" /><small v-if="driverFor('y')" class="driven-note">由{{ driverFor('y') }}控制，请修改对应设置</small></label></div>
           <div v-if="['rect','axes','image'].includes(selected.type)" class="field-row"><label>宽度<Input type="number" min="1" :value="selected.width" @change="editNodeNumber('width', $event)" /></label><label>高度<Input type="number" min="1" :value="selected.height" @change="editNodeNumber('height', $event)" /></label></div>
           <div v-if="['circle','point'].includes(selected.type)" class="field-row"><label>半径<Input type="number" min="1" :value="selected.radius" @change="editNodeNumber('radius', $event)" /></label><label>透明度<Input type="number" min="0" max="1" step="0.1" :value="selected.opacity ?? 1" @change="editNodeNumber('opacity', $event)" /></label></div>
           <div v-if="['line','arrow'].includes(selected.type)" class="field-row"><label>终点 X<Input type="number" :value="selected.x2" @change="editNodeNumber('x2', $event)" /></label><label>终点 Y<Input type="number" :value="selected.y2" @change="editNodeNumber('y2', $event)" /></label></div>

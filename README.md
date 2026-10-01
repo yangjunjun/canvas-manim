@@ -53,6 +53,10 @@ player.play()
 
 SDK 还导出 `createBlankProject`、`evaluateScene`、`validateProject`、`projectToBlob`、`projectFromBlob`、`exportPng`、`exportFrames`、`exportVideo` 和 `resolveExportRange`。`exportFrames(project, sceneId, params, fps, { start, end })` 与 `exportVideo(project, sceneId, params, { start, end })` 可导出指定时间段，时间以秒计且必须满足 `0 ≤ start < end ≤ scene.duration`。`player.setParams()` 会拒绝不存在、非有限或越界参数并报出允许范围。项目默认保存为 `.cmanim` ZIP 包，包含 `project.json` 和可选资产；无图片时也能直接读取项目 JSON。编辑器和代码都可读取共同场景能力。JavaScript 回调无法写入项目文件，保存时会报出具体路径；`extensions` 在编辑器中只读展示并原样保留。
 
+编辑器顶部的「分享」会生成包含项目、场景、参数和播放时刻的链接；打开链接即可复现当时状态。SDK 可调用 `createShareUrl({ project, sceneId, params, time }, location.href)` 和 `readShareUrl(url)`。数据保存在 URL 片段中，无需托管服务；链接片段最多 32,000 个字符，较大的项目请使用 `.cmanim` 文件。链接是生成时的快照，修改作品后需重新生成。
+
+对象属性支持画布锚点布局、路径跟随、同类对象匹配变形和轨迹残影。`applyAnimationCombo(scene, nodeId, { kind, start, duration, amount })` 可重复应用淡入滑入、脉冲缩放或淡出滑出组合，生成可在时间线继续编辑的关键帧；已有同属性轨道时会报错。具体参数和示例见 [使用指南](docs/usage.md)。
+
 表达式支持数字、参数名、`t`、`x`、`pi`、`e`、`+ - * / ^`、括号，以及 `sin`、`cos`、`tan`、`sqrt`、`abs`、`min`、`max` 等常用函数。它采用受限解析器，不执行任意 JavaScript。公式输入采用 TeX 常用数学语法，渲染为 SVG 并绘入 Canvas。
 填充色与描边色轨道中的 `#RGB` 或 `#RRGGBB` 值按 sRGB 通道线性插值，并支持缓入缓出或阶跃；其他颜色字符串按关键帧切换。
 

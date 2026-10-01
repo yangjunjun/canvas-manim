@@ -111,7 +111,7 @@ export class Player {
 
   render(): void {
     if (!this.ready || this.destroyed) return
-    try { renderScene(this.canvas, this.project, evaluateScene(this.currentScene, this.time, this.params, error => this.onError?.(error)), this.resources, this.project.canvas.background, error => this.onError?.(error)) }
+    try { renderScene(this.canvas, this.project, evaluateScene(this.currentScene, this.time, this.params, { canvas: this.project.canvas, onNodeError: error => this.onError?.(error) }), this.resources, this.project.canvas.background, error => this.onError?.(error)) }
     catch (cause) { this.onError?.(cause instanceof Error ? cause : new Error(String(cause))) }
   }
 

@@ -172,7 +172,6 @@ try {
   await page.locator('.canvas-shell canvas').click({ position: { x: 120 / 1280 * mathBounds.width, y: dotY / 720 * mathBounds.height } })
   assert.match(await page.locator('.canvas-badge').innerText(), /运动点/)
   assert.equal(await page.locator('.selection-overlay .selection-rect').count(), 1)
-  await page.waitForFunction(() => document.querySelector('.inspector input[type=number]')?.disabled)
   assert.equal(await page.getByRole('spinbutton', { name: 'X 位置' }).isDisabled(), true)
   assert.match(await page.locator('.driven-note').first().innerText(), /表达式/)
   if (process.env.CANVAS_MANIM_SCREENSHOT) await page.screenshot({ path: process.env.CANVAS_MANIM_SCREENSHOT.replace(/\.png$/, '-initial.png'), fullPage: true })
@@ -217,6 +216,11 @@ try {
   const bounds = await stage.boundingBox()
   assert.ok(bounds)
   const at = (x, y) => ({ x: x / 1280 * bounds.width, y: y / 720 * bounds.height })
+  await page.waitForFunction(() => {
+    const canvas = document.querySelector('.canvas-shell canvas')
+    const pixel = canvas.getContext('2d').getImageData(410, 280, 1, 1).data
+    return pixel[0] === 94 && pixel[1] === 234 && pixel[2] === 212
+  })
   await stage.click({ position: at(410, 280) })
   assert.match(await page.locator('.canvas-badge').innerText(), /圆形/)
   await page.getByRole('spinbutton', { name: 'X 位置' }).fill('640')
@@ -441,6 +445,125 @@ try {
     const saved = JSON.parse(strFromU8(unzipSync(await readFile(await extensionDownload.path()))['project.json']))
     assert.deepEqual(saved.extensions, extensionProject.extensions)
   } finally { await extensionPage.close() }
+  const sharePage = await browser.newPage({ viewport: { width: 1500, height: 960 } })
+  try {
+    await sharePage.goto(baseURL, { waitUntil: 'networkidle' })
+    await sharePage.getByRole('navigation', { name: '右侧工具' }).getByRole('button', { name: '参数' }).click()
+    await setEditorSlider(sharePage, '振幅 A', 1.5, 0.2, 1.8)
+    await setEditorSlider(sharePage, '播放进度', 2.5, 0, 8)
+    const sharedTime = await sharePage.locator('.time-readout').innerText()
+    const sharedAmplitude = await sharePage.locator('.param-head').first().innerText()
+    await sharePage.getByRole('button', { name: '分享' }).click()
+    const shareUrl = await sharePage.getByRole('textbox', { name: '分享链接' }).inputValue()
+    assert.match(shareUrl, /#cmanim=v1\./)
+    const reopened = await browser.newPage({ viewport: { width: 1500, height: 960 } })
+    try {
+      await reopened.goto(shareUrl, { waitUntil: 'networkidle' })
+      assert.match(await reopened.locator('.statusbar').innerText(), /已从分享链接恢复/)
+      assert.equal(await reopened.locator('.time-readout').innerText(), sharedTime)
+      await reopened.getByRole('navigation', { name: '右侧工具' }).getByRole('button', { name: '参数' }).click()
+      assert.equal(await reopened.locator('.param-head').first().innerText(), sharedAmplitude)
+      await reopened.getByRole('navigation', { name: '左侧工具' }).getByRole('button', { name: '图层' }).click()
+      await sharePage.getByRole('navigation', { name: '左侧工具' }).getByRole('button', { name: '图层' }).click()
+      assert.ok(await reopened.locator('.node-list button').count() > 0)
+      assert.equal(await reopened.locator('.node-list button').count(), await sharePage.locator('.node-list button').count())
+    } finally { await reopened.close() }
+    const invalid = await browser.newPage({ viewport: { width: 1500, height: 960 } })
+    try {
+      await invalid.goto(new URL('#cmanim=v1.!', baseURL).href, { waitUntil: 'networkidle' })
+      assert.match(await invalid.locator('.statusbar').innerText(), /分享链接无效/)
+      await invalid.getByRole('heading', { name: /正弦函数/ }).waitFor()
+    } finally { await invalid.close() }
+  } finally { await sharePage.close() }
+  const layoutPage = await browser.newPage({ viewport: { width: 1500, height: 960 } })
+  try {
+    await layoutPage.goto(baseURL, { waitUntil: 'networkidle' })
+    await layoutPage.getByRole('button', { name: '新建', exact: true }).click()
+    await layoutPage.getByRole('button', { name: '添加对象' }).click()
+    await layoutPage.getByRole('menuitem', { name: '圆形' }).click()
+    await chooseOption(layoutPage, '布局锚点', '画布中心')
+    assert.equal(await layoutPage.getByRole('spinbutton', { name: 'X 位置' }).inputValue(), '410')
+    await layoutPage.getByRole('navigation', { name: '右侧工具' }).getByRole('button', { name: '项目' }).click()
+    await layoutPage.getByRole('spinbutton', { name: '画布宽度' }).fill('1600')
+    await layoutPage.getByRole('spinbutton', { name: '画布宽度' }).press('Tab')
+    await layoutPage.getByRole('spinbutton', { name: '画布高度' }).fill('900')
+    await layoutPage.getByRole('spinbutton', { name: '画布高度' }).press('Tab')
+    await layoutPage.getByRole('navigation', { name: '右侧工具' }).getByRole('button', { name: '属性' }).click()
+    assert.equal(await layoutPage.getByRole('spinbutton', { name: 'X 位置' }).inputValue(), '570')
+    assert.equal(await layoutPage.getByRole('spinbutton', { name: 'Y 位置' }).inputValue(), '370')
+    await chooseOption(layoutPage, '布局锚点', '自由位置')
+    assert.equal(await layoutPage.getByRole('spinbutton', { name: 'X 位置' }).inputValue(), '570')
+  } finally { await layoutPage.close() }
+  const routePage = await browser.newPage({ viewport: { width: 1500, height: 960 } })
+  try {
+    await routePage.goto(baseURL, { waitUntil: 'networkidle' })
+    await routePage.getByRole('button', { name: '新建', exact: true }).click()
+    await routePage.getByRole('button', { name: '添加对象' }).click()
+    await routePage.getByRole('menuitem', { name: '路径' }).click()
+    await routePage.getByRole('button', { name: '添加对象' }).click()
+    await routePage.getByRole('menuitem', { name: '圆形' }).click()
+    await chooseOption(routePage, '跟随路径', '路径')
+    await routePage.getByRole('spinbutton', { name: '路径进度' }).fill('0.5')
+    await routePage.getByRole('spinbutton', { name: '路径进度' }).press('Tab')
+    assert.equal(await routePage.getByRole('spinbutton', { name: 'X 位置' }).inputValue(), '500')
+    assert.equal(await routePage.getByRole('spinbutton', { name: 'Y 位置' }).inputValue(), '200')
+    assert.equal(await routePage.getByRole('spinbutton', { name: 'X 位置' }).isDisabled(), true)
+    await routePage.getByRole('textbox', { name: '进度表达式' }).fill('t/8')
+    await routePage.getByRole('textbox', { name: '进度表达式' }).press('Tab')
+    await setEditorSlider(routePage, '播放进度', 4, 0, 8)
+    assert.ok(Math.abs(Number(await routePage.getByRole('spinbutton', { name: 'X 位置' }).inputValue()) - 500) < 2)
+  } finally { await routePage.close() }
+  const trailPage = await browser.newPage({ viewport: { width: 1500, height: 960 }, acceptDownloads: true })
+  try {
+    await trailPage.goto(baseURL, { waitUntil: 'networkidle' })
+    await trailPage.getByRole('button', { name: '新建', exact: true }).click()
+    await trailPage.getByRole('button', { name: '添加对象' }).click()
+    await trailPage.getByRole('menuitem', { name: '圆形' }).click()
+    await trailPage.locator('input[placeholder="X ="]').fill('100+50*t')
+    await trailPage.locator('input[placeholder="X ="]').press('Tab')
+    await chooseOption(trailPage, '轨迹残影', '开启')
+    await trailPage.getByLabel('残影颜色').fill('#ff0000')
+    await trailPage.getByLabel('残影颜色').press('Tab')
+    const trailRuler = trailPage.locator('.ruler-line')
+    const trailRulerBounds = await trailRuler.boundingBox()
+    await trailRuler.click({ position: { x: trailRulerBounds.width / 4, y: trailRulerBounds.height / 2 } })
+    const coloredPixels = await trailPage.locator('.canvas-shell canvas').evaluate(canvas => {
+      const data = canvas.getContext('2d').getImageData(90, 270, 70, 20).data
+      let count = 0
+      for (let index = 0; index < data.length; index += 4) if (data[index] > 50 && data[index + 1] < 50 && data[index + 2] < 50) count++
+      return count
+    })
+    assert.ok(coloredPixels > 0, '历史轨迹应在画布中绘制为红色残影')
+    const trailDownloadPromise = trailPage.waitForEvent('download')
+    await trailPage.getByRole('button', { name: '保存项目' }).click()
+    const trailDownload = await trailDownloadPromise
+    const trailProject = JSON.parse(strFromU8(unzipSync(await readFile(await trailDownload.path()))['project.json']))
+    assert.equal(trailProject.scenes[0].nodes[0].trail.color, '#ff0000')
+  } finally { await trailPage.close() }
+  const comboPage = await browser.newPage({ viewport: { width: 1500, height: 960 }, acceptDownloads: true })
+  try {
+    await comboPage.goto(baseURL, { waitUntil: 'networkidle' })
+    await comboPage.getByRole('button', { name: '新建', exact: true }).click()
+    await comboPage.getByRole('button', { name: '添加对象' }).click()
+    await comboPage.getByRole('menuitem', { name: '圆形' }).click()
+    await comboPage.getByRole('textbox', { name: '名称' }).fill('目标圆')
+    await comboPage.getByRole('textbox', { name: '名称' }).press('Tab')
+    await comboPage.getByRole('spinbutton', { name: 'X 位置' }).fill('200')
+    await comboPage.getByRole('spinbutton', { name: 'X 位置' }).press('Tab')
+    await comboPage.getByRole('button', { name: '添加对象' }).click()
+    await comboPage.getByRole('menuitem', { name: '圆形' }).click()
+    await chooseOption(comboPage, '匹配对象变形', '目标圆')
+    await setEditorSlider(comboPage, '播放进度', 1, 0, 8)
+    assert.ok(Math.abs(Number(await comboPage.getByRole('spinbutton', { name: 'X 位置' }).inputValue()) - 305) < 20)
+    await chooseOption(comboPage, '动画组合', '脉冲缩放')
+    await comboPage.getByRole('button', { name: '应用动画组合' }).click()
+    const comboDownloadPromise = comboPage.waitForEvent('download')
+    await comboPage.getByRole('button', { name: '保存项目' }).click()
+    const comboDownload = await comboDownloadPromise
+    const comboProject = JSON.parse(strFromU8(unzipSync(await readFile(await comboDownload.path()))['project.json']))
+    assert.equal(comboProject.scenes[0].nodes[1].matchTransform.targetId, comboProject.scenes[0].nodes[0].id)
+    assert.equal(comboProject.scenes[0].tracks.find(track => track.nodeId === comboProject.scenes[0].nodes[1].id && track.property === 'scale').keyframes[1].value, 1.25)
+  } finally { await comboPage.close() }
   const keyboardPage = await browser.newPage({ viewport: { width: 1500, height: 960 } })
   try {
     await keyboardPage.goto(baseURL, { waitUntil: 'networkidle' })

@@ -144,6 +144,17 @@ export function renderScene(canvas: HTMLCanvasElement, project: Project, state: 
   ctx.setTransform(scaleX, 0, 0, scaleY, 0, 0)
   ctx.fillStyle = background
   ctx.fillRect(0, 0, logicalWidth, logicalHeight)
+  ctx.save()
+  for (const trail of state.trails ?? []) {
+    ctx.fillStyle = trail.color
+    for (const point of trail.points) {
+      ctx.globalAlpha = point.opacity
+      ctx.beginPath()
+      ctx.arc(point.x, point.y, trail.radius, 0, Math.PI * 2)
+      ctx.fill()
+    }
+  }
+  ctx.restore()
   const nodes = transformedNodes(state.nodes).sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
   const byId = new Map(nodes.map(node => [node.id, node]))
   for (const node of nodes) {

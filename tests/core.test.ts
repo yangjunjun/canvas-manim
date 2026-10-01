@@ -2,8 +2,10 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { evaluateExpression } from '../src/core/expression.ts'
 import { evaluateScene, validateProject } from '../src/core/engine.ts'
+import { applyAnimationCombo } from '../src/core/animation-combos.ts'
 import { resolveExportRange } from '../src/core/export.ts'
 import { projectFromBlob, projectToBlob } from '../src/core/project-file.ts'
+import { createShareUrl, readShareUrl } from '../src/core/share.ts'
 import { createBlankProject, templates } from '../src/core/templates.ts'
 
 test('表达式支持受限数学运算并拒绝任意代码', () => {
@@ -76,6 +78,120 @@ test('扩展数据往返保留，运行时回调和循环引用给出明确保�
   cyclic.self = cyclic
   project.extensions = { cyclic }
   assert.throws(() => projectToBlob(project), /循环引用/)
+})
+
+test('分享链接可复现项目、场景、参数和播放时刻', () => {
+  const project = templates.math()
+  project.extensions = { 'example.note': '正弦曲线教学' }
+  const state = { project, sceneId: project.scenes[0].id, params: { amp: 1.4, freq: 1.2 }, time: 2.5 }
+  const url = createShareUrl(state, 'https://example.test/canvas-manim/?source=class#old')
+  assert.match(url, /^https:\/\/example\.test\/canvas-manim\/\?source=class#cmanim=v1\./)
+  assert.deepEqual(readShareUrl(url), state)
+  assert.equal(readShareUrl('https://example.test/canvas-manim/#other'), null)
+  assert.throws(() => readShareUrl('https://example.test/#cmanim=v2.abc'), /不支持的分享链接版本/)
+  assert.throws(() => readShareUrl('https://example.test/#cmanim=v1.!'), /链接编码无效/)
+  assert.throws(() => createShareUrl({ ...state, time: 99 }, 'https://example.test/'), /播放时刻超出/)
+  assert.throws(() => createShareUrl({ ...state, params: { amp: 99 } }, 'https://example.test/'), /超出范围/)
+  project.extensions = { large: 'A'.repeat(30_000) }
+  assert.throws(() => createShareUrl(state, 'https://example.test/'), /大小上限/)
+})
+
+test('画布锚点布局随画布尺寸确定性调整，并拒绝位置双重驱动', async () => {
+  const project = createBlankProject()
+  const scene = project.scenes[0]
+  scene.nodes.push({ id: 'anchored', type: 'circle', name: '锚定圆', x: 0, y: 0, radius: 10,
+    layout: { anchorX: 'center', anchorY: 'bottom', offsetX: 15, offsetY: -20 } })
+  validateProject(project)
+  const initial = evaluateScene(scene, 2, {}, { canvas: project.canvas }).nodes[0]
+  assert.deepEqual([initial.x, initial.y], [655, 700])
+  project.canvas.width = 1920; project.canvas.height = 1080
+  const resized = evaluateScene(scene, 2, {}, { canvas: project.canvas }).nodes[0]
+  assert.deepEqual([resized.x, resized.y], [975, 1060])
+  assert.equal(scene.nodes[0].x, 0, '求值不得修改保存的静态数据')
+  assert.deepEqual((await projectFromBlob(projectToBlob(project))).scenes[0].nodes[0].layout, scene.nodes[0].layout)
+  assert.throws(() => evaluateScene(scene, 2), /需提供画布配置/)
+  scene.tracks.push({ nodeId: 'anchored', property: 'x', keyframes: [{ time: 0, value: 5 }] })
+  assert.throws(() => validateProject(project), /不能与位置轨道同时使用/)
+})
+
+test('路径跟随按弧长取点、可由时间表达式驱动并沿切线旋转', async () => {
+  const project = createBlankProject()
+  const scene = project.scenes[0]
+  scene.nodes.push(
+    { id: 'route', type: 'path', name: '折线路径', x: 10, y: 20, points: [[0, 0], [100, 0], [100, 100]] },
+    { id: 'dot', type: 'point', name: '运动点', x: 0, y: 0, radius: 5,
+      followPath: { pathId: 'route', progress: 0, progressExpression: 't/8', orient: true, offsetX: 5, offsetY: -5 } },
+  )
+  validateProject(project)
+  const quarter = evaluateScene(scene, 2).nodes[1]
+  assert.deepEqual([quarter.x, quarter.y, quarter.rotation], [65, 15, 0])
+  const threeQuarters = evaluateScene(scene, 6).nodes[1]
+  assert.ok(Math.abs(threeQuarters.x - 115) < 1e-10)
+  assert.ok(Math.abs(threeQuarters.y - 65) < 1e-10)
+  assert.ok(Math.abs(threeQuarters.rotation! - Math.PI / 2) < 1e-10)
+  assert.deepEqual((await projectFromBlob(projectToBlob(project))).scenes[0].nodes[1].followPath, scene.nodes[1].followPath)
+  scene.nodes.unshift({ id: 'group', type: 'group', name: '旋转分组', x: 100, y: 0, rotation: Math.PI / 2 })
+  scene.nodes.find(node => node.id === 'route')!.parentId = 'group'
+  const grouped = evaluateScene(scene, 2).nodes.find(node => node.id === 'dot')!
+  assert.ok(Math.abs(grouped.x - 85) < 1e-10)
+  assert.ok(Math.abs(grouped.y - 55) < 1e-10)
+  assert.ok(Math.abs(grouped.rotation! - Math.PI / 2) < 1e-10)
+  scene.nodes.find(node => node.id === 'dot')!.followPath!.pathId = 'missing'
+  assert.throws(() => validateProject(project), /跟随路径不存在/)
+})
+
+test('轨迹残影由历史逻辑时刻计算，跳转顺序不影响结果', async () => {
+  const project = createBlankProject()
+  const scene = project.scenes[0]
+  scene.nodes.push({ id: 'ball', type: 'circle', name: '运动球', x: 0, y: 100, radius: 8,
+    bindings: { x: '100+20*t' }, trail: { duration: 2, samples: 2, radius: 4, opacity: 0.6, color: '#ff0000' } })
+  validateProject(project)
+  const direct = evaluateScene(scene, 2)
+  evaluateScene(scene, 5)
+  assert.deepEqual(evaluateScene(scene, 2).trails, direct.trails)
+  assert.deepEqual(direct.trails?.[0].points.map(point => [point.x, point.y]), [[100, 100], [120, 100]])
+  assert.equal(direct.nodes[0].x, 140)
+  assert.deepEqual((await projectFromBlob(projectToBlob(project))).scenes[0].nodes[0].trail, scene.nodes[0].trail)
+  scene.nodes[0].trail!.samples = 25
+  assert.throws(() => validateProject(project), /轨迹残影配置无效/)
+})
+
+test('匹配对象在指定区间过渡形态、位置和颜色，并在结束时交接可见性', async () => {
+  const project = createBlankProject(), scene = project.scenes[0]
+  scene.nodes.push(
+    { id: 'from', type: 'polygon', name: '初始', x: 100, y: 100, fill: '#000000', points: [[0, 0], [20, 0], [0, 20]], matchTransform: { targetId: 'to', start: 1, end: 3, easing: 'linear' } },
+    { id: 'to', type: 'polygon', name: '目标', x: 300, y: 200, fill: '#ffffff', points: [[0, 0], [60, 0], [0, 60]] },
+  )
+  validateProject(project)
+  assert.equal(evaluateScene(scene, 0).nodes[1].visible, false)
+  const halfway = evaluateScene(scene, 2).nodes
+  assert.deepEqual([halfway[0].x, halfway[0].y, halfway[0].fill, halfway[0].points], [200, 150, '#808080', [[0, 0], [40, 0], [0, 40]]])
+  assert.equal(halfway[1].visible, false)
+  const finished = evaluateScene(scene, 3).nodes
+  assert.equal(finished[0].visible, false)
+  assert.notEqual(finished[1].visible, false)
+  assert.deepEqual((await projectFromBlob(projectToBlob(project))).scenes[0].nodes[0].matchTransform, scene.nodes[0].matchTransform)
+  scene.nodes[1].points!.push([60, 60])
+  assert.throws(() => validateProject(project), /顶点数量不同/)
+})
+
+test('动画组合可复用于不同对象，参数独立且不覆盖已有轨道', () => {
+  const project = createBlankProject(), scene = project.scenes[0]
+  scene.nodes.push(
+    { id: 'a', type: 'circle', name: 'A', x: 100, y: 200, radius: 10 },
+    { id: 'b', type: 'circle', name: 'B', x: 200, y: 300, radius: 10 },
+  )
+  applyAnimationCombo(scene, 'a', { kind: 'fadeSlideIn', start: 1, duration: 2, amount: 80 })
+  applyAnimationCombo(scene, 'b', { kind: 'fadeSlideIn', start: 2, duration: 4, amount: 40 })
+  validateProject(project)
+  const a = evaluateScene(scene, 2).nodes[0], b = evaluateScene(scene, 4).nodes[1]
+  assert.deepEqual([a.y, a.opacity], [240, 0.5])
+  assert.deepEqual([b.y, b.opacity], [320, 0.5])
+  assert.throws(() => applyAnimationCombo(scene, 'a', { kind: 'fadeSlideOut', start: 4, duration: 2, amount: 30 }), /已有动画或约束/)
+  applyAnimationCombo(scene, 'a', { kind: 'pulse', start: 4, duration: 2, amount: 1.5 })
+  assert.equal(evaluateScene(scene, 5).nodes[0].scale, 1.5)
+  assert.equal(evaluateScene(scene, 6).nodes[0].scale, 1)
+  assert.throws(() => applyAnimationCombo(scene, 'b', { kind: 'pulse', start: 7, duration: 2, amount: 1.2 }), /参数无效/)
 })
 
 test('代码创建的分组、路径、图片、参数、时间线和扩展数据可在项目文件往返', async () => {

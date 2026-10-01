@@ -44,6 +44,10 @@ export interface SceneNode {
   parentId?: string
   zIndex?: number
   visible?: boolean
+  layout?: { anchorX: 'left' | 'center' | 'right'; anchorY: 'top' | 'center' | 'bottom'; offsetX: number; offsetY: number }
+  followPath?: { pathId: string; progress: number; progressExpression?: string; orient?: boolean; offsetX: number; offsetY: number }
+  trail?: { duration: number; samples: number; radius: number; opacity: number; color?: string }
+  matchTransform?: { targetId: string; start: number; end: number; easing: 'linear' | 'easeInOut' }
 }
 
 export interface Keyframe {
@@ -88,4 +92,5 @@ export interface EvaluatedScene {
   nodes: SceneNode[]
   params: Record<string, number>
   time: number
+  trails?: Array<{ nodeId: string; color: string; radius: number; points: Array<{ x: number; y: number; opacity: number }> }>
 }

@@ -32,7 +32,7 @@ export async function exportPng(project: Project, sceneId: string, time: number,
   const resources = new ResourceCache()
   await resources.preload(project, sceneId)
   const canvas = outputCanvas(project)
-  renderScene(canvas, project, evaluateScene(scene, time, params), resources, project.canvas.background)
+  renderScene(canvas, project, evaluateScene(scene, time, params, { canvas: project.canvas }), resources, project.canvas.background)
   return asBlob(canvas)
 }
 
@@ -48,7 +48,7 @@ export async function exportFrames(project: Project, sceneId: string, params: Re
   const canvas = outputCanvas(project)
   const files: Record<string, Uint8Array> = { 'manifest.json': strToU8(JSON.stringify({ sceneId, fps, start, end, duration: end - start, frames: count })) }
   for (let i = 0; i < count; i++) {
-    renderScene(canvas, project, evaluateScene(scene, Math.min(end, start + i / fps), params), resources, project.canvas.background)
+    renderScene(canvas, project, evaluateScene(scene, Math.min(end, start + i / fps), params, { canvas: project.canvas }), resources, project.canvas.background)
     files[`frames/${String(i).padStart(4, '0')}.png`] = new Uint8Array(await (await asBlob(canvas)).arrayBuffer())
   }
   return new Blob([Uint8Array.from(zipSync(files, { level: 0 }))], { type: 'application/zip' })
@@ -82,14 +82,14 @@ export async function exportVideo(project: Project, sceneId: string, params: Rec
       }
       recorder.onstop = () => resolve(new Blob(chunks, { type: recorder.mimeType || mime }))
     })
-    renderScene(canvas, project, evaluateScene(scene, start, params), resources, project.canvas.background)
+    renderScene(canvas, project, evaluateScene(scene, start, params, { canvas: project.canvas }), resources, project.canvas.background)
     recorder.start()
     await new Promise<void>((resolve, reject) => {
       const startTime = performance.now()
       const draw = (now: number) => {
         try {
           const time = Math.min(end, start + (now - startTime) / 1000)
-          renderScene(canvas, project, evaluateScene(scene, time, params), resources, project.canvas.background)
+          renderScene(canvas, project, evaluateScene(scene, time, params, { canvas: project.canvas }), resources, project.canvas.background)
           if (time >= end) resolve()
           else frame = requestAnimationFrame(draw)
         } catch (cause) { reject(cause) }

@@ -40,6 +40,7 @@
             <li><span class="step-index">02</span><div><h3>添加圆形</h3><p>点击左侧<strong>「图层」</strong>图标，在展开的面板里通过<strong>「＋ 添加」</strong>选择<strong>「圆形」</strong>。新圆形会被选中，右侧自动打开「属性」面板；你可以拖动画布上的圆，或修改 X、Y 位置和颜色。</p></div></li>
             <li><span class="step-index">03</span><div><h3>放置起点关键帧</h3><p>保持圆形选中。在中间时间线把动画属性选为<strong>「X 位置」</strong>，点击时间刻度的 <code>0.00 s</code> 位置，再点<strong>「＋ 关键帧」</strong>。时间线上会出现一枚菱形。</p></div></li>
             <li><span class="step-index">04</span><div><h3>放置终点关键帧</h3><p>点击时间刻度的 <code>2.00 s</code> 位置，再点一次<strong>「＋ 关键帧」</strong>。选中新菱形，在时间线下方的<strong>「值」</strong>输入框填入 <code>900</code> 并按 Enter。现在点击画布下方的<strong>播放按钮「▶」</strong>，小球会向右移动。</p><div class="tip"><strong>没动起来？</strong>检查同一条 X 位置轨道上是否有两个不同时间、不同数值的关键帧。拖动菱形可调整时间，选中后也可修改数值或删除关键帧。</div></div></li>
+            <li><span class="step-index">05</span><div><h3>加一条公式</h3><p>点击左侧「图层」图标，在「＋ 添加」中选择「公式」。选中公式后，在右侧「名称」输入 <code>x(t)=x_0+vt</code> 并按 Enter。拖动公式到小球上方；下面继续给小球添加可调参数，最后保存或导出。</p></div></li>
           </ol>
           <a class="inline-action" href="./">现在去编辑器试一遍 →</a>
         </section>
@@ -51,11 +52,11 @@
 
         <section class="doc-section" id="templates"><div class="section-heading"><span class="chapter">03 / 现成内容</span><h2>先改模板，再做自己的作品</h2><p>点击编辑器左侧「模板」图标，可打开六个能直接播放、修改、导出的示例。切换模板会替换当前项目，请先保存自己的改动。</p></div>
           <div class="template-cards"><article><span class="template-glyph teal">∿</span><h3>正弦函数</h3><p>播放时观察运动点与图像。在右侧调「振幅」和「频率」，看看曲线和读数如何同步变化。</p></article><article><span class="template-glyph teal">◯</span><h3>单位圆</h3><p>改变显示半径和角速度，观察旋转点、正弦与余弦投影如何同步变化。</p></article><article><span class="template-glyph blue">↗</span><h3>抛体运动</h3><p>拖动「初速度」等参数，观察轨迹、位置和速度。示例使用忽略空气阻力的理想模型。</p></article><article><span class="template-glyph blue">◡</span><h3>单摆运动</h3><p>调整摆长、初始摆角和重力加速度，查看小角度近似模型下的摆球位置与周期。</p></article><article><span class="template-glyph amber">⌕</span><h3>二分查找</h3><p>用播放进度逐步查看比较位置、左右边界和最后找到的目标。</p></article><article><span class="template-glyph amber">▥</span><h3>冒泡排序</h3><p>拖动时间线观察相邻逆序元素交换，柱形最终按数值从小到大排列。</p></article></div>
-          <p class="note">要自己画函数图像：先在「对象图层」添加「坐标系」，再添加「函数曲线」。选中曲线后，在检查器的「函数 y = f(x)」里输入如 <code>sin(x)</code>。</p>
+          <p class="note">要自己画函数图像：先在「对象图层」添加「坐标系」，再添加「函数曲线」。选中曲线后，在检查器的「函数 y = f(x)」里输入如 <code>sin(x)</code>。选中对象后还可以在属性面板设置布局锚点、路径跟随、匹配对象变形和轨迹残影；「动画组合」可快速生成淡入滑入、脉冲缩放或淡出滑出的关键帧，各项参数都能单独调整。</p>
         </section>
 
         <section class="doc-section" id="export"><div class="section-heading"><span class="chapter">04 / 完成作品</span><h2>保存项目，或者导出画面</h2><p>“保存项目”和“导出”用途不同：前者用于下次继续编辑，后者用于课件、文章和视频。</p></div>
-          <div class="export-list"><div><strong>保存项目</strong><p>顶部点击「保存项目」，下载 <code>.cmanim</code> 文件。下次点「打开」选这个文件，继续修改对象、关键帧和参数。</p></div><div><strong>当前帧 PNG</strong><p>将进度拖到想要的时刻，点击顶部最右侧「导出作品」并选择「当前帧 PNG」。适合插入 PPT 或文章。</p></div><div><strong>视频 / 逐帧 ZIP</strong><p>在「导出作品」下拉菜单中选择浏览器支持的「视频 WebM」或「视频 MP4」；按钮不可用时选「逐帧 ZIP」。首版没有音轨，逐帧 ZIP 最多 360 帧。</p></div></div>
+          <div class="export-list"><div><strong>保存项目</strong><p>顶部点击「保存项目」，下载 <code>.cmanim</code> 文件。下次点「打开」选这个文件，继续修改对象、关键帧和参数。</p></div><div><strong>分享链接</strong><p>点击「分享」，复制包含当前项目、场景、参数和时刻的链接。重新打开即可复现；修改作品后请重新生成。项目过大时请保存项目文件。</p></div><div><strong>当前帧 PNG</strong><p>将进度拖到想要的时刻，点击顶部最右侧「导出作品」并选择「当前帧 PNG」。适合插入 PPT 或文章。</p></div><div><strong>视频 / 逐帧 ZIP</strong><p>在「导出作品」下拉菜单中选择浏览器支持的「视频 WebM」或「视频 MP4」；按钮不可用时选「逐帧 ZIP」。首版没有音轨，逐帧 ZIP 最多 360 帧。</p></div></div>
         </section>
 
         <section class="doc-section" id="sdk"><div class="section-heading"><span class="chapter">05 / 编程式 SDK</span><h2>在网页里嵌入动画</h2><p>如果你会写前端代码，可以直接创建项目数据并挂载播放器。SDK 与编辑器使用同一格式；先在编辑器做作品，再用 SDK 加载也可以。</p></div>
@@ -67,8 +68,11 @@ const project = createBlankProject()
 const scene = project.scenes[0]
 scene.nodes.push({
   id: 'ball', type: 'circle', name: '小球',
-  x: 100, y: 150, radius: 24, fill: '#5eead4',
+  x: 100, y: 150, radius: 24, fill: '#5eead4', bindings: { y: 'height' },
 })
+scene.nodes.push({ id: 'formula', type: 'formula', name: '位移公式', x: 80, y: 80,
+  text: 'x(t)=x_0+vt', fontSize: 28, fill: '#ffffff' })
+scene.params.push({ id: 'height', label: '小球高度', value: 150, min: 80, max: 400, step: 10, unit: 'px' })
 scene.tracks.push({
   nodeId: 'ball', property: 'x',
   keyframes: [
@@ -78,6 +82,7 @@ scene.tracks.push({
 })
 
 const player = mountPlayer(document.querySelector('#stage')!, project)
+player.setParams({ height: 220 })
 player.play()
 // 页面卸载时调用 player.destroy()</code></pre>
           <p class="note">工程内开发可以参照 <code>examples/sdk-demo.html</code>；库构建产物在 <code>dist-lib/</code>。项目文件只保存数据，不保存任意 JavaScript 回调。</p>
