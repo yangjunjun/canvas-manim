@@ -27,7 +27,7 @@ try {
   page.on('pageerror', error => errors.push(error.message))
   await page.goto(baseURL, { waitUntil: 'networkidle' })
   await page.getByRole('heading', { name: /正弦函数/ }).waitFor()
-  const themeBackground = await page.locator('html').evaluate(node => getComputedStyle(node).getPropertyValue('--background').trim())
+  const themeBackground = await page.locator('.workspace').evaluate(node => getComputedStyle(node).backgroundColor)
   assert.equal(await page.locator('.topbar').evaluate(node => getComputedStyle(node).backgroundColor), themeBackground)
   assert.match(await page.locator('body').evaluate(node => getComputedStyle(node).fontFamily), /Inter Variable/)
   assert.equal(await page.locator('.export-trigger').getAttribute('data-slot'), 'dropdown-menu-trigger')
@@ -89,7 +89,14 @@ try {
   assert.ok(layerListBounds.height > 500, '图层列表应填满侧栏剩余高度')
   assert.ok(Math.abs(layerListBounds.y + layerListBounds.height - (layerPanelBounds.y + layerPanelBounds.height)) < 2)
   await page.getByRole('button', { name: '添加对象' }).click()
-  assert.equal(await page.locator('.add-node-menu').evaluate(node => getComputedStyle(node).backgroundColor), await page.locator('html').evaluate(node => getComputedStyle(node).getPropertyValue('--popover').trim()))
+  assert.equal(await page.locator('.add-node-menu').evaluate(node => getComputedStyle(node).backgroundColor), await page.locator('html').evaluate(node => {
+    const swatch = document.createElement('span')
+    swatch.style.backgroundColor = 'var(--popover)'
+    node.appendChild(swatch)
+    const color = getComputedStyle(swatch).backgroundColor
+    swatch.remove()
+    return color
+  }))
   await page.keyboard.press('Escape')
   await projectTool.click()
   assert.equal(await page.locator('#right-panel').isVisible(), true)
@@ -269,7 +276,7 @@ try {
   }
   assert.deepEqual(errors, [])
   if (process.env.CANVAS_MANIM_SCREENSHOT) await page.screenshot({ path: process.env.CANVAS_MANIM_SCREENSHOT, fullPage: true })
-  await page.goto(new URL('/examples/sdk-demo.html', baseURL).href, { waitUntil: 'networkidle' })
+  await page.goto(new URL('examples/sdk-demo.html', baseURL).href, { waitUntil: 'networkidle' })
   await page.getByRole('heading', { name: '编程式 SDK 示例' }).waitFor()
   assert.equal(await page.locator('body').evaluate(node => getComputedStyle(node).backgroundColor), 'rgb(246, 248, 250)')
   assert.equal(await page.locator('canvas').count(), 1)
@@ -278,28 +285,32 @@ try {
   assert.equal(await page.locator('#time').innerText(), '2.00s')
   await page.getByRole('button', { name: '播放' }).click()
   await page.getByRole('button', { name: '暂停' }).waitFor()
-  const isolated = await page.evaluate(async () => {
-    const { mountPlayer, templates } = await import('/src/sdk.ts')
-    const firstHost = document.createElement('div')
-    const secondHost = document.createElement('div')
-    document.body.append(firstHost, secondHost)
-    const first = mountPlayer(firstHost, templates.math())
-    const second = mountPlayer(secondHost, templates.physics())
-    first.seek(2)
-    first.setParams({ amp: 1.7 })
-    second.seek(3)
-    const result = {
-      firstTime: first.currentTime,
-      secondTime: second.currentTime,
-      firstAmp: first.currentParams.amp,
-      secondAmp: second.currentParams.amp,
-      mounted: firstHost.querySelectorAll('canvas').length + secondHost.querySelectorAll('canvas').length,
-    }
-    first.destroy()
-    second.destroy()
-    return { ...result, remaining: firstHost.querySelectorAll('canvas').length + secondHost.querySelectorAll('canvas').length }
-  })
-  assert.deepEqual(isolated, { firstTime: 2, secondTime: 3, firstAmp: 1.7, secondAmp: undefined, mounted: 2, remaining: 0 })
+  const sdkSourceUrl = new URL('src/sdk.ts', baseURL).href
+  const sdkSourceAvailable = (await page.request.get(sdkSourceUrl)).ok()
+  if (sdkSourceAvailable) {
+    const isolated = await page.evaluate(async sourceUrl => {
+      const { mountPlayer, templates } = await import(sourceUrl)
+      const firstHost = document.createElement('div')
+      const secondHost = document.createElement('div')
+      document.body.append(firstHost, secondHost)
+      const first = mountPlayer(firstHost, templates.math())
+      const second = mountPlayer(secondHost, templates.physics())
+      first.seek(2)
+      first.setParams({ amp: 1.7 })
+      second.seek(3)
+      const result = {
+        firstTime: first.currentTime,
+        secondTime: second.currentTime,
+        firstAmp: first.currentParams.amp,
+        secondAmp: second.currentParams.amp,
+        mounted: firstHost.querySelectorAll('canvas').length + secondHost.querySelectorAll('canvas').length,
+      }
+      first.destroy()
+      second.destroy()
+      return { ...result, remaining: firstHost.querySelectorAll('canvas').length + secondHost.querySelectorAll('canvas').length }
+    }, sdkSourceUrl)
+    assert.deepEqual(isolated, { firstTime: 2, secondTime: 3, firstAmp: 1.7, secondAmp: undefined, mounted: 2, remaining: 0 })
+  }
   assert.deepEqual(errors, [])
   const timelinePage = await browser.newPage({ viewport: { width: 1500, height: 960 } })
   try {
@@ -364,7 +375,7 @@ try {
     assert.ok((await phone.getByRole('button', { name: '新建', exact: true }).boundingBox()).height <= 36)
     assert.equal(await phone.locator('.ruler-line span:visible').count(), 5)
   } finally { await phone.close() }
-  console.log('Browser smoke passed: light theme, tool rails and panels, guide, editor, six templates, timeline, project roundtrip, exports, SDK demo and player isolation')
+  console.log(`Browser smoke passed: light theme, tool rails and panels, guide, editor, six templates, timeline, project roundtrip, exports, SDK demo${sdkSourceAvailable ? ' and player isolation' : ''}`)
 } finally {
   await browser.close()
 }

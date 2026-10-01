@@ -22,6 +22,10 @@ pnpm run check:sdk
 浏览器冒烟测试需要本地开发服务器及 Chromium。设置 `CANVAS_MANIM_CHROMIUM` 为本机 Chromium 可执行文件路径后运行 `pnpm test:browser`。
 两条创作路径的操作步骤见 [使用指南](docs/usage.md)。
 
+## GitHub Pages
+
+推送 `master` 后，[部署工作流](.github/workflows/deploy-pages.yml)会安装锁定依赖、运行测试和类型检查，以 `/canvas-manim/` 为基础路径构建编辑器、指南和 SDK 示例，再发布到 `https://yangjunjun.github.io/canvas-manim/`。也可以在 Actions 页面手动触发部署。GitHub Free 账号需要公开仓库才能启用 Pages；私有仓库需要支持私有 Pages 的套餐。
+
 编辑器界面使用 shadcn-vue 的 `a2LKcc4` preset（Reka Mira / Neutral / Inter）与 Tailwind CSS 4。主题配置在 `components.json` 和 `src/shadcn.css`；画布内部的深色配色属于作品内容，不随编辑器主题改变。Inter 字体随构建本地打包，无需在线字体服务。
 
 点击编辑器左侧「模板」图标可打开六个可编辑项目：正弦函数、单位圆、抛体运动、单摆运动、二分查找和冒泡排序。新增三个项目在 SDK 中分别可通过 `templates.unitCircle()`、`templates.pendulum()`、`templates.bubbleSort()` 创建。
